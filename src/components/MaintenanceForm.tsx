@@ -79,7 +79,7 @@ export const MaintenanceForm: React.FC = () => {
     } else if (rooms.length > 0 && !roomId) {
       setRoomId(rooms[0].id);
     }
-  }, [preselectedRoomIdForLog, rooms]);
+  }, [preselectedRoomIdForLog, rooms, roomId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +124,7 @@ export const MaintenanceForm: React.FC = () => {
       newRam: category === 'ترقية رام' ? upgradedRam.trim() || undefined : undefined,
       actionDetails: actionDetails.trim() || undefined,
       executorName: executorName.trim() || undefined,
-      date,
+      date: date || new Date().toISOString().split('T')[0],
     });
 
     setLastLoggedOperation({
@@ -132,26 +132,35 @@ export const MaintenanceForm: React.FC = () => {
       category,
     });
 
-    // Reset details while keeping room & executor for smooth repetitive entry
+    // Reset optional spec fields while keeping selected room for ease of adding more
     setActionDetails('');
     setDevicesCount('');
     setItemsCount('');
+    setDeviceBrand('');
+    setOldDeviceName('');
+    setOldDeviceRam('');
+    setOldDeviceStorage('');
+    setNewDeviceName('');
+    setNewDeviceRam('');
+    setNewDeviceStorage('');
+    setPrevRam('');
+    setUpgradedRam('');
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
       
-      {/* Title */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header Banner */}
+      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold mb-2">
-            <Wrench className="w-3.5 h-3.5" />
-            <span>تسجيل فني مرن</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-bold mb-2 border border-blue-100 dark:border-blue-900/60">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>تسجيل العمليات والإجراءات الفنية</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
             نموذج إضافة عملية جديدة
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             تسجيل دقيق لكافة تفاصيل الصيانة والاستبدال وترقيات الرام. جميع الحقول والمعلومات اختيارية.
           </p>
         </div>
@@ -159,14 +168,14 @@ export const MaintenanceForm: React.FC = () => {
 
       {/* Success Notification Bar if just logged */}
       {lastLoggedOperation && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-emerald-800 animate-in slide-in-from-top-3">
+        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-center justify-between gap-3 text-emerald-800 dark:text-emerald-200 animate-in slide-in-from-top-3">
           <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div className="text-xs sm:text-sm">
               <span className="font-bold">
                 تم تسجيل عملية ({lastLoggedOperation.category}) في "{lastLoggedOperation.roomName}" بنجاح!
               </span>
-              <span className="block text-emerald-600 text-xs mt-0.5">
+              <span className="block text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">
                 تم تحديث الإحصائيات الفنية للقاعة والنظام تلقائياً.
               </span>
             </div>
@@ -176,7 +185,7 @@ export const MaintenanceForm: React.FC = () => {
               onClick={() => {
                 if (roomId) setSelectedRoomIdForModal(roomId);
               }}
-              className="text-xs font-bold underline hover:text-emerald-950"
+              className="text-xs font-bold underline hover:text-emerald-950 dark:hover:text-emerald-100"
             >
               ملف القاعة
             </button>
@@ -191,19 +200,19 @@ export const MaintenanceForm: React.FC = () => {
       )}
 
       {/* Main Form */}
-      <form onSubmit={handleSubmit} className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
         
         {/* 1. Room Selection */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-blue-600" />
+              <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>اختيار القاعة / المعمل</span>
             </span>
             <button
               type="button"
               onClick={() => setActiveTab('rooms')}
-              className="text-blue-600 hover:underline text-[11px] font-bold"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-[11px] font-bold"
             >
               + إضافة قاعة جديدة
             </button>
@@ -215,7 +224,7 @@ export const MaintenanceForm: React.FC = () => {
               setRoomId(e.target.value);
               setPreselectedRoomIdForLog(e.target.value);
             }}
-            className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+            className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-slate-800"
           >
             {rooms.length === 0 && <option value="">لا توجد قاعات مضافة، يرجى إضافة قاعة أولاً</option>}
             {rooms.map((room) => (
@@ -228,7 +237,7 @@ export const MaintenanceForm: React.FC = () => {
 
         {/* 2. Main Operation Category Selection */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-2.5">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2.5">
             نوع العملية الأساسية:
           </label>
 
@@ -247,11 +256,11 @@ export const MaintenanceForm: React.FC = () => {
                   onClick={() => setCategory(item.id)}
                   className={`flex flex-col items-center justify-center p-3.5 rounded-2xl border-2 text-xs font-bold transition-all text-center gap-2 ${
                     isSelected
-                      ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm scale-[1.02]'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shadow-sm scale-[1.02]'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  <div className={`p-2 rounded-xl ${isSelected ? 'bg-white text-blue-600 shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`p-2 rounded-xl ${isSelected ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
                     {item.icon}
                   </div>
                   <span>{item.label}</span>
@@ -263,11 +272,11 @@ export const MaintenanceForm: React.FC = () => {
 
         {/* 3. Conditional Sub-Type & Specifics */}
 
-        {/* CASE A: صيانة عامة (خيارات: اجهزه، شبكه، شاشات، تنظيم، تحديث، تنشيط) */}
+        {/* CASE A: صيانة عامة */}
         {category === 'صيانة عامة' && (
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4 animate-in fade-in duration-200">
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <div>
-              <span className="block text-xs font-bold text-slate-700 mb-2">
+              <span className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                 خيارات الصيانة العامة:
               </span>
               <div className="flex flex-wrap gap-2">
@@ -288,7 +297,7 @@ export const MaintenanceForm: React.FC = () => {
                       className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
                         isSubSelected
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
                       {sub.icon}
@@ -301,9 +310,9 @@ export const MaintenanceForm: React.FC = () => {
 
             {/* If Maintenance SubType is 'أجهزة' or 'تحديث' */}
             {(generalSubType === 'أجهزة' || generalSubType === 'تحديث') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     كم جهاز تم صيانته / تحديثه؟ <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
                   </label>
                   <input
@@ -312,11 +321,11 @@ export const MaintenanceForm: React.FC = () => {
                     value={devicesCount}
                     onChange={(e) => setDevicesCount(e.target.value)}
                     placeholder="مثال: 12"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     نوع / ماركة الأجهزة <span className="text-[11px] text-slate-400 font-normal">(فراغ صغير: Dell, HP...)</span>
                   </label>
                   <input
@@ -324,7 +333,7 @@ export const MaintenanceForm: React.FC = () => {
                     value={deviceBrand}
                     onChange={(e) => setDeviceBrand(e.target.value)}
                     placeholder="مثال: Dell أو HP أو Lenovo"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
@@ -332,11 +341,11 @@ export const MaintenanceForm: React.FC = () => {
           </div>
         )}
 
-        {/* CASE B: استبدال (خيارات: اجهزه، شاشات، ماوسات، كيبوردات) */}
+        {/* CASE B: استبدال */}
         {category === 'استبدال' && (
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4 animate-in fade-in duration-200">
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <div>
-              <span className="block text-xs font-bold text-slate-700 mb-2">
+              <span className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                 تحديد المستبدل (استبدال ماذا؟):
               </span>
               <div className="flex flex-wrap gap-2">
@@ -355,7 +364,7 @@ export const MaintenanceForm: React.FC = () => {
                       className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
                         isSubSelected
                           ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
                       {sub.icon}
@@ -368,9 +377,9 @@ export const MaintenanceForm: React.FC = () => {
 
             {/* If replacing 'أجهزة' -> Old Device vs New Device details */}
             {replacementSubType === 'أجهزة' ? (
-              <div className="space-y-4 pt-2 border-t border-slate-200/60">
+              <div className="space-y-4 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div className="w-full sm:w-1/3">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     كم عدد الأجهزة المستبدلة؟ <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
                   </label>
                   <input
@@ -379,19 +388,19 @@ export const MaintenanceForm: React.FC = () => {
                     value={devicesCount}
                     onChange={(e) => setDevicesCount(e.target.value)}
                     placeholder="مثال: 1"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Old Device Box */}
-                  <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-200/80 space-y-3">
-                    <span className="text-xs font-bold text-rose-800 block">
+                  <div className="p-4 bg-rose-50/50 dark:bg-rose-950/30 rounded-2xl border border-rose-200/80 dark:border-rose-900/60 space-y-3">
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 block">
                       معلومات الجهاز القديم (المستبدل):
                     </span>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                           اسم / نوع الجهاز:
                         </label>
                         <input
@@ -399,12 +408,12 @@ export const MaintenanceForm: React.FC = () => {
                           value={oldDeviceName}
                           onChange={(e) => setOldDeviceName(e.target.value)}
                           placeholder="مثال: Dell 7040"
-                          className="w-full px-3 py-1.5 rounded-lg border border-rose-200 text-xs bg-white"
+                          className="w-full px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                             الرام:
                           </label>
                           <input
@@ -412,11 +421,11 @@ export const MaintenanceForm: React.FC = () => {
                             value={oldDeviceRam}
                             onChange={(e) => setOldDeviceRam(e.target.value)}
                             placeholder="مثال: 8GB"
-                            className="w-full px-3 py-1.5 rounded-lg border border-rose-200 text-xs bg-white"
+                            className="w-full px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                             المساحة:
                           </label>
                           <input
@@ -424,7 +433,7 @@ export const MaintenanceForm: React.FC = () => {
                             value={oldDeviceStorage}
                             onChange={(e) => setOldDeviceStorage(e.target.value)}
                             placeholder="مثال: 500GB HDD"
-                            className="w-full px-3 py-1.5 rounded-lg border border-rose-200 text-xs bg-white"
+                            className="w-full px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                           />
                         </div>
                       </div>
@@ -432,13 +441,13 @@ export const MaintenanceForm: React.FC = () => {
                   </div>
 
                   {/* New Device Box */}
-                  <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200/80 space-y-3">
-                    <span className="text-xs font-bold text-emerald-800 block">
+                  <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60 space-y-3">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block">
                       معلومات الجهاز الجديد (المضاف):
                     </span>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                           اسم / نوع الجهاز الجديد:
                         </label>
                         <input
@@ -446,12 +455,12 @@ export const MaintenanceForm: React.FC = () => {
                           value={newDeviceName}
                           onChange={(e) => setNewDeviceName(e.target.value)}
                           placeholder="مثال: HP EliteDesk 800"
-                          className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 text-xs bg-white"
+                          className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                             الرام:
                           </label>
                           <input
@@ -459,11 +468,11 @@ export const MaintenanceForm: React.FC = () => {
                             value={newDeviceRam}
                             onChange={(e) => setNewDeviceRam(e.target.value)}
                             placeholder="مثال: 16GB"
-                            className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 text-xs bg-white"
+                            className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-0.5">
                             المساحة:
                           </label>
                           <input
@@ -471,7 +480,7 @@ export const MaintenanceForm: React.FC = () => {
                             value={newDeviceStorage}
                             onChange={(e) => setNewDeviceStorage(e.target.value)}
                             placeholder="مثال: 1TB SSD"
-                            className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 text-xs bg-white"
+                            className="w-full px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/80 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                           />
                         </div>
                       </div>
@@ -481,9 +490,9 @@ export const MaintenanceForm: React.FC = () => {
               </div>
             ) : (
               /* If replacing screens, mouses, keyboards */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     كم عدد {replacementSubType} المستبدلة؟ <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
                   </label>
                   <input
@@ -492,11 +501,11 @@ export const MaintenanceForm: React.FC = () => {
                     value={itemsCount}
                     onChange={(e) => setItemsCount(e.target.value)}
                     placeholder="مثال: 10"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     نوع / ماركة {replacementSubType} <span className="text-[11px] text-slate-400 font-normal">(فراغ صغير: Dell, HP, Logitech...)</span>
                   </label>
                   <input
@@ -504,7 +513,7 @@ export const MaintenanceForm: React.FC = () => {
                     value={deviceBrand}
                     onChange={(e) => setDeviceBrand(e.target.value)}
                     placeholder="مثال: Logitech أو Dell أو HP"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -514,13 +523,13 @@ export const MaintenanceForm: React.FC = () => {
 
         {/* CASE C: ترقية رام */}
         {category === 'ترقية رام' && (
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4 animate-in fade-in duration-200">
-            <span className="block text-xs font-bold text-slate-700">
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
+            <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
               تفاصيل ترقية الرام:
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   كم جهاز تمت ترقيته؟
                 </label>
                 <input
@@ -529,11 +538,11 @@ export const MaintenanceForm: React.FC = () => {
                   value={devicesCount}
                   onChange={(e) => setDevicesCount(e.target.value)}
                   placeholder="مثال: 24"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   نوع / ماركة الجهاز:
                 </label>
                 <input
@@ -541,11 +550,11 @@ export const MaintenanceForm: React.FC = () => {
                   value={deviceBrand}
                   onChange={(e) => setDeviceBrand(e.target.value)}
                   placeholder="مثال: Dell 7070"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   الرام السابق:
                 </label>
                 <input
@@ -553,11 +562,11 @@ export const MaintenanceForm: React.FC = () => {
                   value={prevRam}
                   onChange={(e) => setPrevRam(e.target.value)}
                   placeholder="مثال: 8GB"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   الرام الجديد:
                 </label>
                 <input
@@ -565,7 +574,7 @@ export const MaintenanceForm: React.FC = () => {
                   value={upgradedRam}
                   onChange={(e) => setUpgradedRam(e.target.value)}
                   placeholder="مثال: 16GB"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -574,13 +583,13 @@ export const MaintenanceForm: React.FC = () => {
 
         {/* CASE D: شاشات */}
         {category === 'شاشات' && (
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4 animate-in fade-in duration-200">
-            <span className="block text-xs font-bold text-slate-700">
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
+            <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
               تفاصيل عملية الشاشات:
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   كم عدد الشاشات؟
                 </label>
                 <input
@@ -589,11 +598,11 @@ export const MaintenanceForm: React.FC = () => {
                   value={devicesCount}
                   onChange={(e) => setDevicesCount(e.target.value)}
                   placeholder="مثال: 1 أو 2"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   نوع وموديل الشاشة / الحجم:
                 </label>
                 <input
@@ -601,7 +610,7 @@ export const MaintenanceForm: React.FC = () => {
                   value={deviceBrand}
                   onChange={(e) => setDeviceBrand(e.target.value)}
                   placeholder="مثال: Samsung 75 بوصة ذكية"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -610,9 +619,9 @@ export const MaintenanceForm: React.FC = () => {
 
         {/* 4. Action Details (Optional) */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-blue-600" />
+              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>تفاصيل العمل المنجز</span>
               <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
             </span>
@@ -623,7 +632,7 @@ export const MaintenanceForm: React.FC = () => {
             value={actionDetails}
             onChange={(e) => setActionDetails(e.target.value)}
             placeholder="اكتب أي تفاصيل أو ملاحظات إضافية عن العملية المنفذة..."
-            className="w-full p-4 rounded-2xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           />
         </div>
 
@@ -631,8 +640,8 @@ export const MaintenanceForm: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <User className="w-4 h-4 text-blue-600" />
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>اسم المنفذ</span>
               <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
             </label>
@@ -641,13 +650,13 @@ export const MaintenanceForm: React.FC = () => {
               value={executorName}
               onChange={(e) => setExecutorName(e.target.value)}
               placeholder="اكتب اسم المنفذ للعملية (اختياري)..."
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-blue-600" />
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>تاريخ الإجراء</span>
               <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
             </label>
@@ -655,14 +664,14 @@ export const MaintenanceForm: React.FC = () => {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-slate-800"
             />
           </div>
 
         </div>
 
         {/* Submit Button */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
           <button
             type="button"
             onClick={() => {
@@ -670,7 +679,7 @@ export const MaintenanceForm: React.FC = () => {
               setDevicesCount('');
               setItemsCount('');
             }}
-            className="text-xs font-bold text-slate-500 hover:text-slate-800"
+            className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
           >
             إفراغ النص
           </button>

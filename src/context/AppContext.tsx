@@ -42,6 +42,8 @@ interface AppContextType {
   exportBackupJson: () => void;
   importBackupJson: (file: File) => Promise<boolean>;
   resetToDefaultData: () => void;
+  darkMode: boolean;
+  toggleDarkMode: () => void;
   toasts: ToastState[];
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
@@ -119,6 +121,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedRoomIdForModal, setSelectedRoomIdForModal] = useState<string | null>(null);
   const [preselectedRoomIdForLog, setPreselectedRoomIdForLog] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
+
+  // Dark Mode State
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('it_hub_theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (darkMode) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('it_hub_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('it_hub_theme', 'light');
+      }
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkMode((prev) => !prev);
+  }, []);
 
   // Persist rooms with requestIdleCallback/lightweight timeout to prevent UI blocking
   useEffect(() => {
@@ -453,6 +481,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exportBackupJson,
     importBackupJson,
     resetToDefaultData,
+    darkMode,
+    toggleDarkMode,
     toasts,
     showToast,
   }), [
@@ -477,6 +507,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exportBackupJson,
     importBackupJson,
     resetToDefaultData,
+    darkMode,
+    toggleDarkMode,
     toasts,
     showToast,
   ]);

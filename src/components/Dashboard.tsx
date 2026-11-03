@@ -37,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPrintModal }) => {
-  const { rooms, logs, stats, setActiveTab, setSelectedRoomIdForModal, exportLogsToExcel } = useApp();
+  const { rooms, logs, stats, setActiveTab, setSelectedRoomIdForModal, exportLogsToExcel, darkMode } = useApp();
 
   // 1. Action Category Distribution (Pie Chart Data)
   const pieData = useMemo(() => {
@@ -121,120 +121,120 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
         </div>
       </div>
 
-      {/* Main KPI Stats Cards: Exact Counters Requested */}
+      {/* Main KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        {/* KPI 1: Devices Maintained (كم جهاز تم صيانته بشكل عام) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+        {/* KPI 1: Devices Maintained */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">أجهزة تم صيانتها بشكل عام</span>
-            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تم صيانتها بشكل عام</span>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Wrench className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-blue-700">{stats.devicesMaintained}</span>
-            <span className="text-xs text-slate-500 font-medium">جهاز تمت صيانته</span>
+            <span className="text-3xl font-extrabold text-blue-700 dark:text-blue-400">{stats.devicesMaintained}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">جهاز تمت صيانته</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>صيانة دورية للأجهزة</span>
-            <span className="font-bold text-blue-700">منجز</span>
+            <span className="font-bold text-blue-700 dark:text-blue-400">منجز</span>
           </div>
         </div>
 
-        {/* KPI 2: Devices Upgraded (كم جهاز تم ترقيته) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+        {/* KPI 2: Devices Upgraded (RAM) */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">أجهزة تمت ترقيتها (رام)</span>
-            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تمت ترقيتها (رام)</span>
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <Cpu className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-indigo-700">{stats.devicesUpgraded}</span>
-            <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md">
+            <span className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-400">{stats.devicesUpgraded}</span>
+            <span className="text-xs text-indigo-600 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
               جهاز مرقى
             </span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>ترقية رامات الذاكرة</span>
-            <span className="font-bold text-indigo-700">نشط</span>
+            <span className="font-bold text-indigo-700 dark:text-indigo-400">نشط</span>
           </div>
         </div>
 
-        {/* KPI 3: Devices Updated (كم جهاز تحدّث) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+        {/* KPI 3: Devices Updated */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">أجهزة تم تحديثها</span>
-            <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تم تحديثها</span>
+            <div className="w-11 h-11 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center">
               <RefreshCw className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-teal-700">{stats.devicesUpdated}</span>
-            <span className="text-xs text-teal-600 font-semibold bg-teal-50 px-2 py-0.5 rounded-md">
+            <span className="text-3xl font-extrabold text-teal-700 dark:text-teal-400">{stats.devicesUpdated}</span>
+            <span className="text-xs text-teal-600 dark:text-teal-300 font-semibold bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-md">
               جهاز محدث
             </span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>تحديث أنظمة وتعريفات</span>
-            <span className="font-bold text-teal-700">جاهز</span>
+            <span className="font-bold text-teal-700 dark:text-teal-400">جاهز</span>
           </div>
         </div>
 
         {/* KPI 4: Replaced Devices & Items */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">عمليات الاستبدال</span>
-            <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">عمليات الاستبدال</span>
+            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Sparkles className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-purple-700">{stats.devicesReplaced}</span>
-            <span className="text-xs text-slate-500 font-medium">جهاز + {stats.itemsReplaced} ملحقات</span>
+            <span className="text-3xl font-extrabold text-purple-700 dark:text-purple-400">{stats.devicesReplaced}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">جهاز + {stats.itemsReplaced} ملحقات</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>شاشات / ماوسات / كيبوردات</span>
-            <span className="font-bold text-purple-700">{stats.screensCount} شاشة</span>
+            <span className="font-bold text-purple-700 dark:text-purple-400">{stats.screensCount} شاشة</span>
           </div>
         </div>
 
       </div>
 
-      {/* Secondary Counters (Total Operations & Total Rooms) */}
+      {/* Secondary Counters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl">
               <ClipboardCheck className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-xs text-slate-500 font-bold block">إجمالي سجل العمليات المنفذة</span>
-              <span className="text-lg font-black text-slate-800">{stats.totalOperations} عملية مسجلة</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block">إجمالي سجل العمليات المنفذة</span>
+              <span className="text-lg font-black text-slate-800 dark:text-white">{stats.totalOperations} عملية مسجلة</span>
             </div>
           </div>
           <button
             onClick={() => setActiveTab('reports')}
-            className="text-xs font-bold text-blue-600 hover:underline"
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
           >
             عرض السجل الشامل
           </button>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+            <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-xs text-slate-500 font-bold block">إجمالي القاعات والمعامل</span>
-              <span className="text-lg font-black text-slate-800">{stats.totalRooms} قاعة مسجلة</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block">إجمالي القاعات والمعامل</span>
+              <span className="text-lg font-black text-slate-800 dark:text-white">{stats.totalRooms} قاعة مسجلة</span>
             </div>
           </div>
           <button
             onClick={() => setActiveTab('rooms')}
-            className="text-xs font-bold text-amber-600 hover:underline"
+            className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
           >
             إدارة القاعات
           </button>
@@ -245,13 +245,13 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Chart 1: Action Category Distribution (Pie Chart) */}
-        <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900">توزيع العمليات الفنية</h2>
-              <p className="text-xs text-slate-500">نسبة كل نوع عملية من إجمالي العمليات</p>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">توزيع العمليات الفنية</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">نسبة كل نوع عملية من إجمالي العمليات</p>
             </div>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl">
               <Wrench className="w-5 h-5" />
             </div>
           </div>
@@ -276,7 +276,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                   <Tooltip
                     formatter={(value: any, name: any) => [`${value} عملية`, name]}
                     contentStyle={{
-                      backgroundColor: '#1e293b',
+                      backgroundColor: darkMode ? '#0f172a' : '#1e293b',
                       borderRadius: '12px',
                       color: '#ffffff',
                       direction: 'rtl',
@@ -292,27 +292,27 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
           </div>
 
           {/* Legend Grid */}
-          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
             {pieData.map((item) => (
               <div key={item.name} className="flex items-center gap-2 text-xs">
                 <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-slate-600 truncate">{item.name}:</span>
-                <span className="font-bold text-slate-900">{item.value}</span>
+                <span className="text-slate-600 dark:text-slate-300 truncate">{item.name}:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{item.value}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Chart 2: Most Active Rooms (Bar Chart) */}
-        <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900">أكثر القاعات نشاطاً في العمليات</h2>
-              <p className="text-xs text-slate-500">عدد الإجراءات والأعمال المنجزة داخل كل قاعة</p>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">أكثر القاعات نشاطاً في العمليات</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">عدد الإجراءات والأعمال المنجزة داخل كل قاعة</p>
             </div>
             <button
               onClick={() => setActiveTab('rooms')}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
             >
               <span>عرض كل القاعات</span>
               <ArrowUpRight className="w-4 h-4" />
@@ -323,20 +323,20 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#334155' : '#f1f5f9'} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    tick={{ fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11 }}
                     interval={0}
                     angle={-15}
                     textAnchor="end"
                   />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} allowDecimals={false} />
+                  <YAxis tick={{ fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11 }} allowDecimals={false} />
                   <Tooltip
                     formatter={(value: any) => [`${value} عملية`, 'الإجمالي']}
                     labelFormatter={(label) => `القاعة: ${label}`}
                     contentStyle={{
-                      backgroundColor: '#1e293b',
+                      backgroundColor: darkMode ? '#0f172a' : '#1e293b',
                       borderRadius: '12px',
                       color: '#ffffff',
                       direction: 'rtl',
@@ -344,7 +344,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                       fontSize: '12px',
                     }}
                   />
-                  <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={32} />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={32} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -354,24 +354,24 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
             )}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>اضغط على أي قاعة لعرض ملفها وسجل عملياتها وملاحظاتها المؤرخة</span>
-            <span className="font-semibold text-blue-700">تحديث فوري</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">تحديث فوري</span>
           </div>
         </div>
 
       </div>
 
       {/* Recent Activity Table Preview */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">آخر العمليات المنفذة</h2>
-            <p className="text-xs text-slate-500">سجل لحظي لآخر الأعمال والترقيات المسجلة بالقاعات</p>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">آخر العمليات المنفذة</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">سجل لحظي لآخر الأعمال والترقيات المسجلة بالقاعات</p>
           </div>
           <button
             onClick={() => setActiveTab('reports')}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all"
           >
             <span>عرض السجل الشامل ({logs.length})</span>
             <ArrowUpRight className="w-4 h-4" />
@@ -381,7 +381,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-500 text-xs font-bold bg-slate-50/50">
+              <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/50">
                 <th className="py-3 px-4">القاعة</th>
                 <th className="py-3 px-4">نوع العملية</th>
                 <th className="py-3 px-4">التصنيف والعدد</th>
@@ -392,7 +392,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                 <th className="py-3 px-4 text-center">ملف القاعة</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {recentLogs.map((log) => {
                 const roomName = roomMap.get(log.roomId) || 'غير محدد';
                 const badgeColor = CATEGORY_COLORS[log.category] || '#3b82f6';
@@ -414,28 +414,28 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                 }
 
                 return (
-                  <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-800">
+                  <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">
                       {roomName}
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold text-white shadow-xs"
                         style={{ backgroundColor: badgeColor }}
                       >
                         {log.category}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-medium text-slate-700 text-xs">
+                    <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300 text-xs">
                       {subAndCount}
                     </td>
-                    <td className="py-3 px-4 font-medium text-slate-600 text-xs">
+                    <td className="py-3 px-4 font-medium text-slate-600 dark:text-slate-300 text-xs">
                       {specs || '-'}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 max-w-xs truncate text-xs">
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-300 max-w-xs truncate text-xs">
                       {log.actionDetails || '-'}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 text-xs whitespace-nowrap">
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">
                       {log.executorName ? (
                         <div className="flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-slate-400" />
@@ -445,7 +445,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-slate-500 text-xs whitespace-nowrap">
+                    <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
                         <span>{log.date}</span>
@@ -454,7 +454,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => setSelectedRoomIdForModal(log.roomId)}
-                        className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors text-xs font-semibold"
+                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors text-xs font-semibold"
                         title="فتح ملف القاعة"
                       >
                         عرض
