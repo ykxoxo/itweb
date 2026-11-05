@@ -1,56 +1,53 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, protocol, net, Menu, shell } = require('electron');
 const path = require('path');
-const http = require('http');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
+
+// 1. Register custom scheme before app is ready
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 let mainWindow = null;
-let server = null;
-const DEFAULT_PORT = 48291;
 
-// MIME types for static file serving
-const MIME_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.eot': 'application/vnd.ms-fontobject',
-};
+function resolveBasePath() {
+  const packagedPath = path.join(process.resourcesPath, 'out');
+  if (fs.existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  return path.join(__dirname, '..', 'out');
+}
 
-// Start a lightweight internal local HTTP server to serve the exported Next.js static files
-function startInternalServer(port = DEFAULT_PORT) {
-  return new Promise((resolve, reject) => {
-    // Resolve path to the exported 'out' folder
-    let basePath = path.join(process.resourcesPath, 'out');
-    if (!fs.existsSync(basePath)) {
-      basePath = path.join(__dirname, '..', 'out');
-    }
+function createWindow() {
+  const basePath = resolveBasePath();
 
-    server = http.createServer((req, res) => {
+  // Register modern app:// protocol handler
+  try {
+    protocol.handle('app', (request) => {
       try {
-        let reqPath = decodeURI(req.url.split('?')[0]);
-        if (reqPath === '/' || reqPath === '') {
-          reqPath = '/index.html';
+        const parsedUrl = new URL(request.url);
+        let pathname = decodeURI(parsedUrl.pathname);
+        if (pathname === '/' || pathname === '') {
+          pathname = '/index.html';
         }
 
-        let filePath = path.join(basePath, reqPath);
+        let filePath = path.join(basePath, pathname);
 
-        // Security check: ensure path is within basePath
+        // Security check
         if (!filePath.startsWith(basePath)) {
-          res.writeHead(403);
-          return res.end('Access denied');
+          return new Response('Access denied', { status: 403 });
         }
 
-        // Check if file exists, or fallback to index.html for SPA routing
+        // Fallback for Next.js routing / sub-pages
         if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
           const htmlCandidate = filePath + '.html';
           if (fs.existsSync(htmlCandidate)) {
@@ -60,46 +57,15 @@ function startInternalServer(port = DEFAULT_PORT) {
           }
         }
 
-        if (fs.existsSync(filePath)) {
-          const ext = path.extname(filePath).toLowerCase();
-          const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-          const content = fs.readFileSync(filePath);
-          res.writeHead(200, {
-            'Content-Type': contentType,
-            'Cache-Control': 'no-cache',
-          });
-          return res.end(content);
-        }
-
-        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Not Found');
+        return net.fetch(pathToFileURL(filePath).toString());
       } catch (err) {
-        console.error('Server error:', err);
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Internal Server Error');
+        console.error('Protocol handler error:', err);
+        return new Response('Not Found', { status: 404 });
       }
     });
-
-    server.listen(port, '127.0.0.1', () => {
-      resolve(port);
-    });
-
-    server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        // Try another port if DEFAULT_PORT is in use
-        const fallbackPort = 0; // OS assigns random available port
-        server.listen(fallbackPort, '127.0.0.1', () => {
-          resolve(server.address().port);
-        });
-      } else {
-        reject(err);
-      }
-    });
-  });
-}
-
-async function createWindow() {
-  const port = await startInternalServer();
+  } catch (e) {
+    // Protocol already handled if re-created
+  }
 
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -117,30 +83,36 @@ async function createWindow() {
     },
   });
 
-  // Remove default menu for a clean app feel
+  // Remove standard menu bar for a clean desktop app look
   Menu.setApplicationMenu(null);
 
-  // Load the application
-  await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  // Load the application via native app:// scheme
+  mainWindow.loadURL('app://local/index.html');
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.maximize();
     mainWindow.show();
   });
 
-  // Open external links in user's default browser
+  // Open external links in user's default web browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:')) {
-      if (!url.includes('127.0.0.1')) {
-        shell.openExternal(url);
-        return { action: 'deny' };
-      }
+      shell.openExternal(url);
+      return { action: 'deny' };
     }
     return { action: 'allow' };
   });
 
+  // CRITICAL: Guarantee 100% clean process exit when window is closed
+  mainWindow.on('close', () => {
+    app.exit(0);
+    process.exit(0);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+    app.exit(0);
+    process.exit(0);
   });
 }
 
@@ -148,17 +120,11 @@ async function createWindow() {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (server) {
-    server.close();
-  }
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.exit(0);
+  process.exit(0);
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+app.on('before-quit', () => {
+  app.exit(0);
+  process.exit(0);
 });
-
