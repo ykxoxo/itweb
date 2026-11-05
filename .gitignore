@@ -15,6 +15,12 @@ node_modules/
 # Production
 dist/
 dist-ssr/
+IT-Maintenance-Hub-App/
+desktop-app/
+release-desktop/
+desktop-release/
+build-desktop-staging/
+*.zip
 
 # Misc
 .DS_Store
