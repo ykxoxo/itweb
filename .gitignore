@@ -15,6 +15,7 @@ node_modules/
 # Production
 dist/
 dist-ssr/
+IT-Maintenance-Hub-Single-EXE/
 IT-Assets-Hub-Desktop/
 IT-Maintenance-Hub-Windows/
 IT-Maintenance-Hub-App/
