@@ -29,6 +29,7 @@ import {
 
 export const MaintenanceForm: React.FC = () => {
   const {
+    buildings,
     rooms,
     addLog,
     preselectedRoomIdForLog,
@@ -227,11 +228,30 @@ export const MaintenanceForm: React.FC = () => {
             className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-slate-800"
           >
             {rooms.length === 0 && <option value="">لا توجد قاعات مضافة، يرجى إضافة قاعة أولاً</option>}
-            {rooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name} (حالة الشاشة: {room.screenStatus})
-              </option>
-            ))}
+            {buildings.map((building) => {
+              const buildingRooms = rooms.filter((r) => r.buildingId === building.id);
+              if (buildingRooms.length === 0) return null;
+              return (
+                <optgroup key={building.id} label={`🏢 ${building.name}`}>
+                  {buildingRooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {room.name} (حالة الشاشة: {room.screenStatus})
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+            {rooms.filter((r) => !buildings.some((b) => b.id === r.buildingId)).length > 0 && (
+              <optgroup label="قاعات أخرى">
+                {rooms
+                  .filter((r) => !buildings.some((b) => b.id === r.buildingId))
+                  .map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {room.name} (حالة الشاشة: {room.screenStatus})
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
         </div>
 

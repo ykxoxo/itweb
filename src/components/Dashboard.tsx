@@ -37,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPrintModal }) => {
-  const { rooms, logs, stats, setActiveTab, setSelectedRoomIdForModal, exportLogsToExcel, darkMode } = useApp();
+  const { buildings, rooms, logs, stats, setActiveTab, setSelectedRoomIdForModal, exportLogsToExcel, darkMode } = useApp();
 
   // 1. Action Category Distribution (Pie Chart Data)
   const pieData = useMemo(() => {
@@ -73,7 +73,8 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
 
   // Recent 6 logs
   const recentLogs = useMemo(() => [...logs].reverse().slice(0, 6), [logs]);
-  const roomMap = useMemo(() => new Map(rooms.map((r) => [r.id, r.name])), [rooms]);
+  const roomObjMap = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms]);
+  const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b.name])), [buildings]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -228,15 +229,17 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block">إجمالي القاعات والمعامل</span>
-              <span className="text-lg font-black text-slate-800 dark:text-white">{stats.totalRooms} قاعة مسجلة</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block">إجمالي المباني والقاعات</span>
+              <span className="text-lg font-black text-slate-800 dark:text-white">
+                {stats.totalBuildings} مبنى • {stats.totalRooms} قاعة
+              </span>
             </div>
           </div>
           <button
             onClick={() => setActiveTab('rooms')}
             className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
           >
-            إدارة القاعات
+            إدارة المباني والقاعات
           </button>
         </div>
       </div>
@@ -394,7 +397,9 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {recentLogs.map((log) => {
-                const roomName = roomMap.get(log.roomId) || 'غير محدد';
+                const room = roomObjMap.get(log.roomId);
+                const roomName = room?.name || 'غير محدد';
+                const buildingName = room?.buildingId ? buildingMap.get(room.buildingId) : null;
                 const badgeColor = CATEGORY_COLORS[log.category] || '#3b82f6';
 
                 let subAndCount = '-';
@@ -415,8 +420,11 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
 
                 return (
                   <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">
-                      {roomName}
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">{roomName}</div>
+                      {buildingName && (
+                        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">{buildingName}</div>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <span

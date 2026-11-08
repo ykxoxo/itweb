@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import type { MaintenanceLog, Room } from '../types';
+import { useApp } from '../context/AppContext';
 import { Printer, X, Server, CheckCircle2 } from 'lucide-react';
 
 interface PrintReportModalProps {
@@ -19,7 +20,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   rooms,
   periodLabel,
 }) => {
-  const roomMap = useMemo(() => new Map(rooms.map((r) => [r.id, r.name])), [rooms]);
+  const { buildings } = useApp();
+  const roomObjMap = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms]);
+  const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b.name])), [buildings]);
 
   // Memoize counters
   const { devicesMaintained, devicesUpgraded, devicesUpdated, devicesReplaced } = useMemo(() => {
@@ -179,23 +182,26 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <tr className="bg-slate-200 text-slate-900 font-bold border-b border-slate-400">
                   <th className="py-2 px-2 border-r border-slate-400 w-10 text-center">#</th>
                   <th className="py-2 px-2.5 border-r border-slate-400 w-24">التاريخ</th>
-                  <th className="py-2 px-2.5 border-r border-slate-400 w-36">القاعة / المعمل</th>
-                  <th className="py-2 px-2.5 border-r border-slate-400 w-28">نوع العملية</th>
+                  <th className="py-2 px-2.5 border-r border-slate-400 w-28">المبنى</th>
+                  <th className="py-2 px-2.5 border-r border-slate-400 w-32">القاعة / المعمل</th>
+                  <th className="py-2 px-2.5 border-r border-slate-400 w-24">نوع العملية</th>
                   <th className="py-2 px-2.5 border-r border-slate-400 w-36">التصنيف / الماركة / العدد</th>
                   <th className="py-2 px-2.5 border-r border-slate-400">تفاصيل العمل المنجز</th>
-                  <th className="py-2 px-2.5 w-28">اسم المنفذ</th>
+                  <th className="py-2 px-2.5 w-24">اسم المنفذ</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-6 text-center text-slate-400">
+                    <td colSpan={8} className="py-6 text-center text-slate-400">
                       لا توجد عمليات مسجلة خلال هذه الفترة
                     </td>
                   </tr>
                 ) : (
                   logs.map((log, index) => {
-                    const roomName = roomMap.get(log.roomId) || 'غير محدد';
+                    const room = roomObjMap.get(log.roomId);
+                    const roomName = room?.name || 'غير محدد';
+                    const buildingName = room?.buildingId ? (buildingMap.get(room.buildingId) || '-') : '-';
 
                     let subAndCount = '-';
                     if (log.category === 'صيانة عامة' && log.generalSubType) {
@@ -223,6 +229,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                         </td>
                         <td className="py-2 px-2.5 border-r border-slate-300 whitespace-nowrap text-[11px]">
                           {log.date}
+                        </td>
+                        <td className="py-2 px-2.5 border-r border-slate-300 text-[11px] whitespace-nowrap">
+                          {buildingName}
                         </td>
                         <td className="py-2 px-2.5 border-r border-slate-300 font-bold text-[11px]">
                           {roomName}

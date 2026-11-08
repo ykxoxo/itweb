@@ -21,9 +21,10 @@ import {
 export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: MaintenanceLog[], periodLabel: string) => void }> = ({
   onOpenPrintModalWithLogs,
 }) => {
-  const { rooms, logs, deleteLog, updateLog, exportLogsToExcel, setSelectedRoomIdForModal } = useApp();
+  const { buildings, rooms, logs, deleteLog, updateLog, exportLogsToExcel, setSelectedRoomIdForModal } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBuildingIdFilter, setSelectedBuildingIdFilter] = useState<string>('all');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -48,30 +49,35 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
     return Array.from(months).sort().reverse();
   }, [logs]);
 
-  const roomMap = useMemo(() => new Map(rooms.map((r) => [r.id, r.name])), [rooms]);
+  const roomObjMap = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms]);
+  const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b.name])), [buildings]);
 
   // Filtering logic
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      const roomName = roomMap.get(log.roomId) || '';
+      const room = roomObjMap.get(log.roomId);
+      const roomName = room?.name || '';
+      const bldgName = room?.buildingId ? (buildingMap.get(room.buildingId) || '') : '';
       const execName = log.executorName || '';
       const details = log.actionDetails || '';
       const brand = log.deviceBrand || '';
 
       const matchesSearch =
         roomName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        bldgName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         details.toLowerCase().includes(searchQuery.toLowerCase()) ||
         execName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
         log.category.toLowerCase().includes(searchQuery.toLowerCase());
 
+      const matchesBuilding = selectedBuildingIdFilter === 'all' || room?.buildingId === selectedBuildingIdFilter;
       const matchesRoom = selectedRoomId === 'all' || log.roomId === selectedRoomId;
       const matchesCategory = selectedCategory === 'all' || log.category === selectedCategory;
       const matchesMonth = selectedMonth === 'all' || log.date.startsWith(selectedMonth);
 
-      return matchesSearch && matchesRoom && matchesCategory && matchesMonth;
+      return matchesSearch && matchesBuilding && matchesRoom && matchesCategory && matchesMonth;
     });
-  }, [logs, searchQuery, selectedRoomId, selectedCategory, selectedMonth, roomMap]);
+  }, [logs, searchQuery, selectedBuildingIdFilter, selectedRoomId, selectedCategory, selectedMonth, roomObjMap, buildingMap]);
 
   const handleStartEdit = (log: MaintenanceLog) => {
     setEditingLogId(log.id);
@@ -104,12 +110,14 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
 
   const handleResetFilters = () => {
     setSearchQuery('');
+    setSelectedBuildingIdFilter('all');
     setSelectedRoomId('all');
     setSelectedCategory('all');
     setSelectedMonth('all');
   };
 
   const getPeriodLabel = () => {
+    let baseLabel = 'التقرير الشامل لكافة الفترات';
     if (selectedMonth !== 'all') {
       const [year, month] = selectedMonth.split('-');
       const monthNames: Record<string, string> = {
@@ -126,10 +134,21 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
         '11': 'نوفمبر',
         '12': 'ديسمبر',
       };
-      return `تقرير شهر: ${monthNames[month] || month} ${year}`;
+      baseLabel = `تقرير شهر: ${monthNames[month] || month} ${year}`;
     }
-    return 'التقرير الشامل لكافة الفترات';
+
+    if (selectedBuildingIdFilter !== 'all') {
+      const bldg = buildings.find((b) => b.id === selectedBuildingIdFilter);
+      if (bldg) baseLabel += ` - ${bldg.name}`;
+    }
+    return baseLabel;
   };
+
+  // Rooms available in filter (if building selected, only its rooms)
+  const availableFilterRooms = useMemo(() => {
+    if (selectedBuildingIdFilter === 'all') return rooms;
+    return rooms.filter((r) => r.buildingId === selectedBuildingIdFilter);
+  }, [rooms, selectedBuildingIdFilter]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -142,7 +161,7 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
             <span>سجل العمليات الشامل والتقارير</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            جدول البيانات الفنية مع الفلترة حسب الشهر والقاعة ونوع العملية وتصدير Excel وطباعة تقرير الإدارة
+            جدول البيانات الفنية مع الفلترة حسب المبنى والقاعة والشهر وتصدير Excel وطباعة تقرير الإدارة
           </p>
         </div>
 
@@ -175,7 +194,7 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
             <span>تصفية وفلترة السجلات الفنية</span>
           </div>
 
-          {(searchQuery || selectedRoomId !== 'all' || selectedCategory !== 'all' || selectedMonth !== 'all') && (
+          {(searchQuery || selectedBuildingIdFilter !== 'all' || selectedRoomId !== 'all' || selectedCategory !== 'all' || selectedMonth !== 'all') && (
             <button
               onClick={handleResetFilters}
               className="text-xs text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 font-semibold"
@@ -186,7 +205,7 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           
           {/* Search */}
           <div className="relative">
@@ -195,7 +214,7 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="بحث بالقاعة أو المنفذ أو الماركة..."
+              placeholder="بحث بالقاعة أو المبنى أو المنفذ..."
               className="w-full pr-10 pl-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
@@ -216,6 +235,25 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
             </select>
           </div>
 
+          {/* Building Filter */}
+          <div>
+            <select
+              value={selectedBuildingIdFilter}
+              onChange={(e) => {
+                setSelectedBuildingIdFilter(e.target.value);
+                setSelectedRoomId('all');
+              }}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-slate-800"
+            >
+              <option value="all">كافة المباني ({buildings.length})</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  🏢 {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Room Filter */}
           <div>
             <select
@@ -223,8 +261,12 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
               onChange={(e) => setSelectedRoomId(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-slate-800"
             >
-              <option value="all">جميع القاعات والمعامل ({rooms.length})</option>
-              {rooms.map((r) => (
+              <option value="all">
+                {selectedBuildingIdFilter === 'all'
+                  ? `جميع القاعات (${rooms.length})`
+                  : `قاعات المبنى المختار (${availableFilterRooms.length})`}
+              </option>
+              {availableFilterRooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>
@@ -275,6 +317,7 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
                 <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">
                   <th className="py-3.5 px-4 w-12 text-center">#</th>
                   <th className="py-3.5 px-4 w-28">تاريخ الإجراء</th>
+                  <th className="py-3.5 px-4 w-36">المبنى</th>
                   <th className="py-3.5 px-4 w-40">القاعة</th>
                   <th className="py-3.5 px-4 w-32">نوع العملية</th>
                   <th className="py-3.5 px-4 w-40">التصنيف / الماركة / العدد</th>
@@ -285,7 +328,9 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredLogs.map((log, index) => {
-                  const roomName = roomMap.get(log.roomId) || 'غير محدد';
+                  const room = roomObjMap.get(log.roomId);
+                  const roomName = room?.name || 'غير محدد';
+                  const bldgName = room?.buildingId ? (buildingMap.get(room.buildingId) || '-') : '-';
                   const isEditing = editingLogId === log.id;
 
                   let subAndCount = '-';
@@ -324,6 +369,10 @@ export const ReportsView: React.FC<{ onOpenPrintModalWithLogs: (logs: Maintenanc
                             <span>{log.date}</span>
                           </div>
                         )}
+                      </td>
+
+                      <td className="py-3 px-4 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap text-xs">
+                        {bldgName}
                       </td>
 
                       <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">

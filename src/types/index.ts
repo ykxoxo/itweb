@@ -37,8 +37,16 @@ export interface RoomNote {
   createdAt: string;
 }
 
+export interface Building {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
 export interface Room {
   id: string;
+  buildingId: string;
   name: string;
   screenStatus: ScreenStatus;
   notes?: string;
@@ -91,4 +99,5 @@ export interface SystemStats {
   itemsReplaced: number;     // كم قطعة استبدلت (ماوسات، كيبوردات، شاشات)
   screensCount: number;      // عمليات الشاشات
   totalRooms: number;
+  totalBuildings: number;
 }

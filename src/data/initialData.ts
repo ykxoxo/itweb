@@ -1,9 +1,31 @@
-import type { Room, MaintenanceLog } from '../types';
+import type { Building, Room, MaintenanceLog } from '../types';
+
+export const INITIAL_BUILDINGS: Building[] = [
+  {
+    id: 'bldg-1',
+    name: 'مبنى الإدارة الرئيسية (A)',
+    description: 'يضم قاعات المؤتمرات والاجتماعات التنفيذية ومكاتب القيادة',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'bldg-2',
+    name: 'مبنى معامل الحاسب والتقنية (B)',
+    description: 'يضم معامل الحاسب المتقدم، الشبكات، ومراكز التدريب التقني',
+    createdAt: '2026-01-05',
+  },
+  {
+    id: 'bldg-3',
+    name: 'مبنى مركز العمليات والدعم الفني (C)',
+    description: 'مركز التحكم والعمليات NOC وغرف الخوادم المركزية',
+    createdAt: '2026-01-08',
+  },
+];
 
 export const INITIAL_ROOMS: Room[] = [
   {
     id: 'room-1',
-    name: 'قاعة المؤتمرات الرئيسية (مبنى A)',
+    buildingId: 'bldg-1',
+    name: 'قاعة المؤتمرات الرئيسية',
     screenStatus: 'تعمل بامتياز',
     roomNotes: [
       {
@@ -16,7 +38,23 @@ export const INITIAL_ROOMS: Room[] = [
     createdAt: '2026-01-10',
   },
   {
+    id: 'room-6',
+    buildingId: 'bldg-1',
+    name: 'قاعة الاجتماعات التنفيذية (VIP)',
+    screenStatus: 'تعمل بامتياز',
+    roomNotes: [
+      {
+        id: 'note-6',
+        text: 'نظام فيديو كونفرنس متكامل وشاشة 4K ذكية.',
+        date: '2026-11-03 09:15 ص',
+        createdAt: '2026-11-03T09:15:00.000Z',
+      },
+    ],
+    createdAt: '2026-02-15',
+  },
+  {
     id: 'room-2',
+    buildingId: 'bldg-2',
     name: 'معمل الحاسب المتقدم (101)',
     screenStatus: 'تعمل بامتياز',
     roomNotes: [
@@ -31,6 +69,7 @@ export const INITIAL_ROOMS: Room[] = [
   },
   {
     id: 'room-3',
+    buildingId: 'bldg-2',
     name: 'قاعة التدريب والتطوير (B-20)',
     screenStatus: 'تحتاج صيانة',
     roomNotes: [
@@ -44,21 +83,8 @@ export const INITIAL_ROOMS: Room[] = [
     createdAt: '2026-01-20',
   },
   {
-    id: 'room-4',
-    name: 'مركز العمليات والتحكم (NOC)',
-    screenStatus: 'تعمل بامتياز',
-    roomNotes: [
-      {
-        id: 'note-4',
-        text: 'مصفوفة 4 شاشات مراقبة جدارية تعمل على مدار الساعة مجهزة بوحدات UPS احتياطية.',
-        date: '2026-11-02 02:45 م',
-        createdAt: '2026-11-02T14:45:00.000Z',
-      },
-    ],
-    createdAt: '2026-02-01',
-  },
-  {
     id: 'room-5',
+    buildingId: 'bldg-2',
     name: 'معمل الشبكات والأنظمة (204)',
     screenStatus: 'لا توجد شاشة',
     roomNotes: [
@@ -72,18 +98,19 @@ export const INITIAL_ROOMS: Room[] = [
     createdAt: '2026-02-10',
   },
   {
-    id: 'room-6',
-    name: 'قاعة الاجتماعات التنفيذية (VIP)',
+    id: 'room-4',
+    buildingId: 'bldg-3',
+    name: 'مركز العمليات والتحكم (NOC)',
     screenStatus: 'تعمل بامتياز',
     roomNotes: [
       {
-        id: 'note-6',
-        text: 'نظام فيديو كونفرنس متكامل وشاشة 4K ذكية.',
-        date: '2026-11-03 09:15 ص',
-        createdAt: '2026-11-03T09:15:00.000Z',
+        id: 'note-4',
+        text: 'مصفوفة 4 شاشات مراقبة جدارية تعمل على مدار الساعة مجهزة بوحدات UPS احتياطية.',
+        date: '2026-11-02 02:45 م',
+        createdAt: '2026-11-02T14:45:00.000Z',
       },
     ],
-    createdAt: '2026-02-15',
+    createdAt: '2026-02-01',
   },
 ];
 

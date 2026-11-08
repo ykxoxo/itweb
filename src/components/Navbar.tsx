@@ -21,6 +21,7 @@ export const Navbar: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    setSelectedBuildingId,
     exportBackupJson,
     importBackupJson,
     resetToDefaultData,
@@ -49,7 +50,7 @@ export const Navbar: React.FC = () => {
 
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'لوحة التحكم', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'rooms', label: 'إدارة القاعات', icon: <Building2 className="w-5 h-5" /> },
+    { id: 'rooms', label: 'إدارة المباني والقاعات', icon: <Building2 className="w-5 h-5" /> },
     { id: 'add-log', label: 'إضافة عملية', icon: <Wrench className="w-5 h-5" /> },
     { id: 'reports', label: 'سجل العمليات والتقارير', icon: <FileSpreadsheet className="w-5 h-5" /> },
   ];
@@ -86,7 +87,12 @@ export const Navbar: React.FC = () => {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => {
+                    if (item.id === 'rooms') {
+                      setSelectedBuildingId(null);
+                    }
+                    setActiveTab(item.id);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                     isActive
                       ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs shadow-slate-300/50 dark:shadow-black/40'
@@ -185,6 +191,9 @@ export const Navbar: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => {
+                    if (item.id === 'rooms') {
+                      setSelectedBuildingId(null);
+                    }
                     setActiveTab(item.id);
                     setMobileMenuOpen(false);
                   }}

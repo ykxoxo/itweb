@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import type { Room, MaintenanceLog, ScreenStatus, OperationCategory, RoomNote, SystemStats } from '../types';
-import { INITIAL_ROOMS, INITIAL_LOGS } from '../data/initialData';
+import type { Building, Room, MaintenanceLog, ScreenStatus, OperationCategory, RoomNote, SystemStats } from '../types';
+import { INITIAL_BUILDINGS, INITIAL_ROOMS, INITIAL_LOGS } from '../data/initialData';
 import * as XLSX from 'xlsx';
 
 export type TabType = 'dashboard' | 'rooms' | 'add-log' | 'reports';
@@ -14,17 +14,25 @@ interface ToastState {
 }
 
 interface AppContextType {
+  buildings: Building[];
   rooms: Room[];
   logs: MaintenanceLog[];
   stats: SystemStats;
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
+  selectedBuildingId: string | null;
+  setSelectedBuildingId: (id: string | null) => void;
   selectedRoomIdForModal: string | null;
   setSelectedRoomIdForModal: (id: string | null) => void;
   preselectedRoomIdForLog: string | null;
   setPreselectedRoomIdForLog: (id: string | null) => void;
+  // Building actions
+  addBuilding: (name: string, description?: string) => Building;
+  updateBuilding: (id: string, updates: Partial<Building>) => void;
+  deleteBuilding: (id: string) => void;
+  getBuildingById: (id: string) => Building | undefined;
   // Room actions
-  addRoom: (name: string, screenStatus: ScreenStatus, initialNote?: string) => Room;
+  addRoom: (name: string, screenStatus: ScreenStatus, initialNote?: string, buildingId?: string) => Room;
   updateRoom: (id: string, updates: Partial<Room>) => void;
   deleteRoom: (id: string) => void;
   // Room Notes actions (Dated notes)
@@ -51,13 +59,32 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  ROOMS: 'it_hub_rooms_v3',
+  BUILDINGS: 'it_hub_buildings_v1',
+  ROOMS: 'it_hub_rooms_v4',
   LOGS: 'it_hub_logs_v3',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [buildings, setBuildings] = useState<Building[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_BUILDINGS;
+    const saved = localStorage.getItem(STORAGE_KEYS.BUILDINGS);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse buildings from localStorage', e);
+      }
+    }
+    return INITIAL_BUILDINGS;
+  });
+
   const [rooms, setRooms] = useState<Room[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ROOMS) || 
+    if (typeof window === 'undefined') return INITIAL_ROOMS;
+    const saved = localStorage.getItem(STORAGE_KEYS.ROOMS) ||
+                  localStorage.getItem('it_hub_rooms_v3') || 
                   localStorage.getItem('it_hub_rooms_v2') || 
                   localStorage.getItem('it_hub_rooms_v1');
     if (saved) {
@@ -76,6 +103,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             return {
               ...r,
+              buildingId: r.buildingId || INITIAL_BUILDINGS[0]?.id || 'bldg-1',
               roomNotes: notesArr,
             };
           });
@@ -88,6 +116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [logs, setLogs] = useState<MaintenanceLog[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_LOGS;
     const saved = localStorage.getItem(STORAGE_KEYS.LOGS) || 
                   localStorage.getItem('it_hub_logs_v2') || 
                   localStorage.getItem('it_hub_logs_v1');
@@ -118,6 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
   const [selectedRoomIdForModal, setSelectedRoomIdForModal] = useState<string | null>(null);
   const [preselectedRoomIdForLog, setPreselectedRoomIdForLog] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
@@ -147,6 +177,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleDarkMode = useCallback(() => {
     setDarkMode((prev) => !prev);
   }, []);
+
+  // Persist buildings
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BUILDINGS, JSON.stringify(buildings));
+    } catch (e) {
+      console.error('Failed to save buildings', e);
+    }
+  }, [buildings]);
 
   // Persist rooms with requestIdleCallback/lightweight timeout to prevent UI blocking
   useEffect(() => {
@@ -215,8 +254,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       itemsReplaced,
       screensCount,
       totalRooms: rooms.length,
+      totalBuildings: buildings.length,
     };
-  }, [logs, rooms]);
+  }, [logs, rooms, buildings]);
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = Date.now();
@@ -226,7 +266,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3500);
   }, []);
 
-  const addRoom = useCallback((name: string, screenStatus: ScreenStatus, initialNote?: string): Room => {
+  // Building Actions
+  const addBuilding = useCallback((name: string, description?: string): Building => {
+    const newBuilding: Building = {
+      id: `bldg-${Date.now()}`,
+      name: name.trim(),
+      description: description?.trim() || undefined,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    setBuildings((prev) => [newBuilding, ...prev]);
+    showToast(`تمت إضافة المبنى "${newBuilding.name}" بنجاح`, 'success');
+    return newBuilding;
+  }, [showToast]);
+
+  const updateBuilding = useCallback((id: string, updates: Partial<Building>) => {
+    setBuildings((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
+    );
+    showToast('تم تحديث بيانات المبنى بنجاح', 'info');
+  }, [showToast]);
+
+  const deleteBuilding = useCallback((id: string) => {
+    const buildingToDelete = buildings.find((b) => b.id === id);
+    const roomsInBuilding = rooms.filter((r) => r.buildingId === id);
+    const roomIdsToDelete = new Set(roomsInBuilding.map((r) => r.id));
+
+    setBuildings((prev) => prev.filter((b) => b.id !== id));
+    setRooms((prev) => prev.filter((r) => !roomIdsToDelete.has(r.id)));
+    setLogs((prev) => prev.filter((l) => !roomIdsToDelete.has(l.roomId)));
+
+    if (selectedBuildingId === id) {
+      setSelectedBuildingId(null);
+    }
+    showToast(`تم حذف المبنى "${buildingToDelete?.name || ''}" وكافة قاعاته وسجلاتها`, 'info');
+  }, [buildings, rooms, selectedBuildingId, showToast]);
+
+  const getBuildingById = useCallback((id: string): Building | undefined => {
+    return buildings.find((b) => b.id === id);
+  }, [buildings]);
+
+  // Room Actions
+  const addRoom = useCallback((
+    name: string,
+    screenStatus: ScreenStatus,
+    initialNote?: string,
+    buildingId?: string
+  ): Room => {
+    const targetBuildingId = buildingId || selectedBuildingId || (buildings.length > 0 ? buildings[0].id : 'bldg-1');
     const roomNotes: RoomNote[] = [];
     if (initialNote?.trim()) {
       const now = new Date();
@@ -240,6 +326,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newRoom: Room = {
       id: `room-${Date.now()}`,
+      buildingId: targetBuildingId,
       name: name.trim(),
       screenStatus,
       roomNotes,
@@ -248,7 +335,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRooms((prev) => [newRoom, ...prev]);
     showToast(`تمت إضافة القاعة "${newRoom.name}" بنجاح`, 'success');
     return newRoom;
-  }, [showToast]);
+  }, [selectedBuildingId, buildings, showToast]);
 
   const updateRoom = useCallback((id: string, updates: Partial<Room>) => {
     setRooms((prev) =>
@@ -355,9 +442,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const exportLogsToExcel = useCallback((customLogs?: MaintenanceLog[], fileNamePrefix = 'تقرير_العمليات_الفنية') => {
     const targetLogs = customLogs || logs;
-    const roomMap = new Map(rooms.map((r) => [r.id, r.name]));
+    const roomObjMap = new Map(rooms.map((r) => [r.id, r]));
+    const buildingMap = new Map(buildings.map((b) => [b.id, b.name]));
 
     const formattedData = targetLogs.map((log, index) => {
+      const room = roomObjMap.get(log.roomId);
+      const buildingName = room?.buildingId ? (buildingMap.get(room.buildingId) || '-') : '-';
+
       let subTypeText = '-';
       if (log.category === 'صيانة عامة' && log.generalSubType) {
         subTypeText = log.generalSubType;
@@ -379,7 +470,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         'م': index + 1,
         'تاريخ الإجراء': log.date,
-        'القاعة': roomMap.get(log.roomId) || 'غير محدد',
+        'المبنى': buildingName,
+        'القاعة': room?.name || 'غير محدد',
         'نوع العملية': log.category,
         'التصنيف الفرعي': subTypeText,
         'العدد': countText,
@@ -396,7 +488,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     worksheet['!cols'] = [
       { wch: 6 },
       { wch: 14 },
-      { wch: 28 },
+      { wch: 22 },
+      { wch: 26 },
       { wch: 18 },
       { wch: 18 },
       { wch: 14 },
@@ -408,13 +501,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const today = new Date().toISOString().split('T')[0];
     XLSX.writeFile(workbook, `${fileNamePrefix}_${today}.xlsx`);
     showToast('تم تحميل ملف Excel بنجاح', 'success');
-  }, [logs, rooms, showToast]);
+  }, [logs, rooms, buildings, showToast]);
 
   const exportBackupJson = useCallback(() => {
     const backupData = {
       app: 'IT Assets & Maintenance Hub',
-      version: '3.0.0',
+      version: '3.1.0',
       exportedAt: new Date().toISOString(),
+      buildings,
       rooms,
       logs,
     };
@@ -429,15 +523,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     a.click();
     URL.revokeObjectURL(url);
     showToast('تم تصدير النسخة الاحتياطية بنجاح', 'success');
-  }, [rooms, logs, showToast]);
+  }, [buildings, rooms, logs, showToast]);
 
   const importBackupJson = useCallback(async (file: File): Promise<boolean> => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
       if (Array.isArray(data.rooms) && Array.isArray(data.logs)) {
+        if (Array.isArray(data.buildings) && data.buildings.length > 0) {
+          setBuildings(data.buildings);
+        } else {
+          setBuildings(INITIAL_BUILDINGS);
+        }
         setRooms(data.rooms);
         setLogs(data.logs);
+        setSelectedBuildingId(null);
         showToast('تمت استعادة النسخة الاحتياطية بنجاح', 'success');
         return true;
       } else {
@@ -450,22 +550,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showToast]);
 
   const resetToDefaultData = useCallback(() => {
+    setBuildings(INITIAL_BUILDINGS);
     setRooms(INITIAL_ROOMS);
     setLogs(INITIAL_LOGS);
+    setSelectedBuildingId(null);
     showToast('تمت إعادة ضبط النظام إلى البيانات التجريبية الافتراضية', 'info');
   }, [showToast]);
 
   // Memoize the entire context value to prevent unnecessary re-renders of consumer components
   const contextValue = useMemo(() => ({
+    buildings,
     rooms,
     logs,
     stats,
     activeTab,
     setActiveTab,
+    selectedBuildingId,
+    setSelectedBuildingId,
     selectedRoomIdForModal,
     setSelectedRoomIdForModal,
     preselectedRoomIdForLog,
     setPreselectedRoomIdForLog,
+    addBuilding,
+    updateBuilding,
+    deleteBuilding,
+    getBuildingById,
     addRoom,
     updateRoom,
     deleteRoom,
@@ -486,12 +595,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toasts,
     showToast,
   }), [
+    buildings,
     rooms,
     logs,
     stats,
     activeTab,
+    selectedBuildingId,
     selectedRoomIdForModal,
     preselectedRoomIdForLog,
+    addBuilding,
+    updateBuilding,
+    deleteBuilding,
+    getBuildingById,
     addRoom,
     updateRoom,
     deleteRoom,

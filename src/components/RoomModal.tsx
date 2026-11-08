@@ -25,6 +25,7 @@ export const RoomModal: React.FC = () => {
   const {
     selectedRoomIdForModal,
     setSelectedRoomIdForModal,
+    buildings,
     rooms,
     logs,
     updateRoom,
@@ -49,6 +50,11 @@ export const RoomModal: React.FC = () => {
   const room = useMemo(() => {
     return rooms.find((r) => r.id === selectedRoomIdForModal);
   }, [rooms, selectedRoomIdForModal]);
+
+  const currentBuilding = useMemo(() => {
+    if (!room?.buildingId) return null;
+    return buildings.find((b) => b.id === room.buildingId) || null;
+  }, [buildings, room]);
 
   // Memoize logs for this room only
   const roomLogs = useMemo(() => {
@@ -136,8 +142,13 @@ export const RoomModal: React.FC = () => {
                 <Building2 className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-black text-slate-900 dark:text-white">{room.name}</h2>
+                  {currentBuilding && (
+                    <span className="text-xs bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800 px-2.5 py-0.5 rounded-full font-bold">
+                      {currentBuilding.name}
+                    </span>
+                  )}
                   <span className="text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full font-semibold">
                     ملف القاعة
                   </span>
