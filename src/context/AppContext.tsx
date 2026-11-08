@@ -1,8 +1,21 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import type { Building, Room, MaintenanceLog, ScreenStatus, OperationCategory, RoomNote, SystemStats } from '../types';
-import { INITIAL_BUILDINGS, INITIAL_ROOMS, INITIAL_LOGS } from '../data/initialData';
+import type {
+  Building,
+  Room,
+  MaintenanceLog,
+  ScreenStatus,
+  OperationCategory,
+  RoomNote,
+  SystemStats,
+  RoomDevice,
+  RoomLayoutType,
+  DeviceStatus,
+  GeneralMaintenanceSubType,
+  ReplacementSubType,
+} from '../types';
+import { INITIAL_BUILDINGS, INITIAL_ROOMS, INITIAL_LOGS, createDefaultDevices } from '../data/initialData';
 import * as XLSX from 'xlsx';
 
 export type TabType = 'dashboard' | 'rooms' | 'add-log' | 'reports';
@@ -32,9 +45,40 @@ interface AppContextType {
   deleteBuilding: (id: string) => void;
   getBuildingById: (id: string) => Building | undefined;
   // Room actions
-  addRoom: (name: string, screenStatus: ScreenStatus, initialNote?: string, buildingId?: string) => Room;
+  addRoom: (
+    name: string,
+    screenStatus: ScreenStatus,
+    initialNote?: string,
+    buildingId?: string,
+    layoutType?: RoomLayoutType,
+    totalDevices?: number
+  ) => Room;
   updateRoom: (id: string, updates: Partial<Room>) => void;
   deleteRoom: (id: string) => void;
+  // Room Map & Devices actions
+  updateRoomDevice: (roomId: string, deviceId: string, updates: Partial<RoomDevice>) => void;
+  bulkUpdateDevices: (
+    roomId: string,
+    deviceIds: string[],
+    actionCategory: OperationCategory,
+    newStatus: DeviceStatus,
+    details?: {
+      generalSubType?: GeneralMaintenanceSubType;
+      replacementSubType?: ReplacementSubType;
+      previousRam?: string;
+      newRam?: string;
+      deviceBrand?: string;
+      actionDetails?: string;
+      executorName?: string;
+    }
+  ) => void;
+  updateRoomLayoutAndCount: (
+    roomId: string,
+    layoutType: RoomLayoutType,
+    totalDevices: number,
+    name?: string,
+    screenStatus?: ScreenStatus
+  ) => void;
   // Room Notes actions (Dated notes)
   addRoomNote: (roomId: string, text: string) => void;
   deleteRoomNote: (roomId: string, noteId: string) => void;
@@ -60,7 +104,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   BUILDINGS: 'it_hub_buildings_v1',
-  ROOMS: 'it_hub_rooms_v4',
+  ROOMS: 'it_hub_rooms_v5',
   LOGS: 'it_hub_logs_v3',
 };
 
@@ -84,6 +128,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [rooms, setRooms] = useState<Room[]>(() => {
     if (typeof window === 'undefined') return INITIAL_ROOMS;
     const saved = localStorage.getItem(STORAGE_KEYS.ROOMS) ||
+                  localStorage.getItem('it_hub_rooms_v4') ||
                   localStorage.getItem('it_hub_rooms_v3') || 
                   localStorage.getItem('it_hub_rooms_v2') || 
                   localStorage.getItem('it_hub_rooms_v1');
@@ -101,10 +146,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 createdAt: new Date().toISOString(),
               });
             }
+
+            const layoutType: RoomLayoutType = r.layoutType || 'two-rows';
+            const totalDevices: number = Number(r.totalDevices) || (Array.isArray(r.devices) && r.devices.length > 0 ? r.devices.length : 20);
+
+            let devices: RoomDevice[] = Array.isArray(r.devices) && r.devices.length > 0 ? r.devices : [];
+            if (devices.length === 0) {
+              devices = createDefaultDevices(r.id || `room-${Date.now()}`, totalDevices);
+            } else if (devices.length < totalDevices) {
+              const diff = totalDevices - devices.length;
+              const newDevices = Array.from({ length: diff }, (_, idx) => {
+                const num = String(devices.length + idx + 1).padStart(2, '0');
+                return {
+                  id: `dev-${r.id}-${devices.length + idx + 1}-${Date.now()}`,
+                  tag: `PC-${num}`,
+                  status: 'لم يتم العمل عليه' as DeviceStatus,
+                  ram: '16GB',
+                  storage: '512GB SSD',
+                };
+              });
+              devices = [...devices, ...newDevices];
+            }
+
             return {
               ...r,
               buildingId: r.buildingId || INITIAL_BUILDINGS[0]?.id || 'bldg-1',
               roomNotes: notesArr,
+              layoutType,
+              totalDevices,
+              devices,
             };
           });
         }
@@ -310,7 +380,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     name: string,
     screenStatus: ScreenStatus,
     initialNote?: string,
-    buildingId?: string
+    buildingId?: string,
+    layoutType: RoomLayoutType = 'two-rows',
+    totalDevices: number = 20
   ): Room => {
     const targetBuildingId = buildingId || selectedBuildingId || (buildings.length > 0 ? buildings[0].id : 'bldg-1');
     const roomNotes: RoomNote[] = [];
@@ -324,16 +396,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    const roomId = `room-${Date.now()}`;
+    const safeCount = Math.max(1, Number(totalDevices) || 20);
+    const generatedDevices = createDefaultDevices(roomId, safeCount);
+
     const newRoom: Room = {
-      id: `room-${Date.now()}`,
+      id: roomId,
       buildingId: targetBuildingId,
       name: name.trim(),
       screenStatus,
       roomNotes,
+      layoutType: layoutType || 'two-rows',
+      totalDevices: safeCount,
+      devices: generatedDevices,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setRooms((prev) => [newRoom, ...prev]);
-    showToast(`تمت إضافة القاعة "${newRoom.name}" بنجاح`, 'success');
+    showToast(`تمت إضافة القاعة "${newRoom.name}" بنجاح مع توزيع (${newRoom.totalDevices}) جهازاً`, 'success');
     return newRoom;
   }, [selectedBuildingId, buildings, showToast]);
 
@@ -342,6 +421,152 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
     );
     showToast('تم تحديث بيانات القاعة بنجاح', 'info');
+  }, [showToast]);
+
+  // Room Device Actions
+  const updateRoomDevice = useCallback((roomId: string, deviceId: string, updates: Partial<RoomDevice>) => {
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const updatedDevices = (r.devices || []).map((d) =>
+          d.id === deviceId ? { ...d, ...updates } : d
+        );
+        return { ...r, devices: updatedDevices };
+      })
+    );
+    showToast('تم تحديث بيانات الجهاز بنجاح', 'success');
+  }, [showToast]);
+
+
+
+  const addLog = useCallback((logData: Omit<MaintenanceLog, 'id' | 'createdAt'>): MaintenanceLog => {
+    const newLog: MaintenanceLog = {
+      ...logData,
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
+    showToast(`تم حفظ وإضافة العملية بنجاح`, 'success');
+    return newLog;
+  }, [showToast]);
+
+  const updateLog = useCallback((id: string, updates: Partial<MaintenanceLog>) => {
+    setLogs((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
+    );
+    showToast('تم تعديل العملية بنجاح', 'info');
+  }, [showToast]);
+
+  const deleteLog = useCallback((id: string) => {
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    showToast('تم حذف العملية بنجاح', 'info');
+  }, [showToast]);
+
+  const bulkUpdateDevices = useCallback((
+    roomId: string,
+    deviceIds: string[],
+    actionCategory: OperationCategory,
+    newStatus: DeviceStatus,
+    details?: {
+      generalSubType?: GeneralMaintenanceSubType;
+      replacementSubType?: ReplacementSubType;
+      previousRam?: string;
+      newRam?: string;
+      deviceBrand?: string;
+      actionDetails?: string;
+      executorName?: string;
+    }
+  ) => {
+    if (deviceIds.length === 0) return;
+    const targetRoom = rooms.find((r) => r.id === roomId);
+    if (!targetRoom) return;
+
+    const deviceIdSet = new Set(deviceIds);
+    const affectedTags = (targetRoom.devices || [])
+      .filter((d) => deviceIdSet.has(d.id))
+      .map((d) => d.tag);
+
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const updatedDevices = (r.devices || []).map((d) => {
+          if (deviceIdSet.has(d.id)) {
+            return {
+              ...d,
+              status: newStatus,
+              ram: details?.newRam || d.ram,
+              brand: details?.deviceBrand || d.brand,
+              lastMaintenanceDate: new Date().toISOString().split('T')[0],
+            };
+          }
+          return d;
+        });
+        return { ...r, devices: updatedDevices };
+      })
+    );
+
+    // Record bulk log entry
+    const logDate = new Date().toISOString().split('T')[0];
+    const logEntry: Omit<MaintenanceLog, 'id' | 'createdAt'> = {
+      roomId,
+      category: actionCategory,
+      generalSubType: details?.generalSubType,
+      replacementSubType: details?.replacementSubType,
+      devicesCount: deviceIds.length,
+      deviceBrand: details?.deviceBrand,
+      previousRam: details?.previousRam,
+      newRam: details?.newRam,
+      deviceTags: affectedTags,
+      actionDetails: details?.actionDetails || `إجراء مجمع على (${deviceIds.length}) أجهزة: [${affectedTags.join(', ')}]`,
+      executorName: details?.executorName || 'الفريق الفني',
+      date: logDate,
+    };
+    addLog(logEntry);
+
+    showToast(`تم تنفيذ الإجراء المجمع بنجاح على ${deviceIds.length} جهاز`, 'success');
+  }, [rooms, addLog, showToast]);
+
+  const updateRoomLayoutAndCount = useCallback((
+    roomId: string,
+    layoutType: RoomLayoutType,
+    totalDevices: number,
+    name?: string,
+    screenStatus?: ScreenStatus
+  ) => {
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        let currentDevices = [...(r.devices || [])];
+        const newTotal = Math.max(1, totalDevices);
+
+        if (currentDevices.length < newTotal) {
+          const diff = newTotal - currentDevices.length;
+          const newDevices = Array.from({ length: diff }, (_, idx) => {
+            const num = String(currentDevices.length + idx + 1).padStart(2, '0');
+            return {
+              id: `dev-${r.id}-${Date.now()}-${idx}`,
+              tag: `PC-${num}`,
+              status: 'لم يتم العمل عليه' as DeviceStatus,
+              ram: '16GB',
+              storage: '512GB SSD',
+            };
+          });
+          currentDevices = [...currentDevices, ...newDevices];
+        } else if (currentDevices.length > newTotal) {
+          currentDevices = currentDevices.slice(0, newTotal);
+        }
+
+        return {
+          ...r,
+          name: name ? name.trim() : r.name,
+          screenStatus: screenStatus || r.screenStatus,
+          layoutType,
+          totalDevices: newTotal,
+          devices: currentDevices,
+        };
+      })
+    );
+    showToast('تم حفظ إعدادات وتخطيط القاعة بنجاح', 'success');
   }, [showToast]);
 
   const deleteRoom = useCallback((id: string) => {
@@ -409,28 +634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('تم تعديل الملاحظة بنجاح', 'success');
   }, [showToast]);
 
-  const addLog = useCallback((logData: Omit<MaintenanceLog, 'id' | 'createdAt'>): MaintenanceLog => {
-    const newLog: MaintenanceLog = {
-      ...logData,
-      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      createdAt: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
-    showToast(`تم حفظ وإضافة العملية بنجاح`, 'success');
-    return newLog;
-  }, [showToast]);
 
-  const updateLog = useCallback((id: string, updates: Partial<MaintenanceLog>) => {
-    setLogs((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
-    );
-    showToast('تم تعديل العملية بنجاح', 'info');
-  }, [showToast]);
-
-  const deleteLog = useCallback((id: string) => {
-    setLogs((prev) => prev.filter((l) => l.id !== id));
-    showToast('تم حذف العملية بنجاح', 'info');
-  }, [showToast]);
 
   const getRoomById = useCallback((id: string): Room | undefined => {
     return rooms.find((r) => r.id === id);
@@ -578,6 +782,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addRoom,
     updateRoom,
     deleteRoom,
+    updateRoomDevice,
+    bulkUpdateDevices,
+    updateRoomLayoutAndCount,
     addRoomNote,
     deleteRoomNote,
     updateRoomNote,
@@ -610,6 +817,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addRoom,
     updateRoom,
     deleteRoom,
+    updateRoomDevice,
+    bulkUpdateDevices,
+    updateRoomLayoutAndCount,
     addRoomNote,
     deleteRoomNote,
     updateRoomNote,

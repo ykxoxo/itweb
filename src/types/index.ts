@@ -44,6 +44,27 @@ export interface Building {
   createdAt: string;
 }
 
+export type DeviceStatus = 
+  | 'تم تحديثه' 
+  | 'يحتاج صيانة' 
+  | 'لم يتم العمل عليه';
+
+export type RoomLayoutType = 
+  | 'u-shape' 
+  | 'two-rows' 
+  | 'four-rows';
+
+export interface RoomDevice {
+  id: string;
+  tag: string;
+  status: DeviceStatus;
+  brand?: string;
+  ram?: string;
+  storage?: string;
+  notes?: string;
+  lastMaintenanceDate?: string;
+}
+
 export interface Room {
   id: string;
   buildingId: string;
@@ -51,6 +72,9 @@ export interface Room {
   screenStatus: ScreenStatus;
   notes?: string;
   roomNotes: RoomNote[];
+  layoutType: RoomLayoutType;
+  totalDevices: number;
+  devices: RoomDevice[];
   createdAt: string;
 }
 
@@ -77,6 +101,9 @@ export interface MaintenanceLog {
   // RAM Upgrade Specs
   previousRam?: string;
   newRam?: string;
+  
+  // Specific device tags if linked to visual map
+  deviceTags?: string[];
   
   // General text & Executor
   actionDetails?: string;    // تفاصيل العمل المنجز (اختياري)

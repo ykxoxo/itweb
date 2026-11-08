@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import type { ScreenStatus, Building } from '../types';
+import type { ScreenStatus, Building, RoomLayoutType } from '../types';
 import { RoomNotesModal } from './RoomNotesModal';
 import {
   Building2,
@@ -96,6 +96,8 @@ export const RoomsList: React.FC = () => {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomScreenStatus, setNewRoomScreenStatus] = useState<ScreenStatus>('تعمل بامتياز');
   const [newRoomInitialNote, setNewRoomInitialNote] = useState('');
+  const [newRoomLayout, setNewRoomLayout] = useState<RoomLayoutType>('u-shape');
+  const [newRoomTotalDevices, setNewRoomTotalDevices] = useState<number>(20);
   const [notesRoomId, setNotesRoomId] = useState<string | null>(null);
 
   // Selected Building
@@ -179,10 +181,19 @@ export const RoomsList: React.FC = () => {
     e.preventDefault();
     if (!newRoomName.trim() || !selectedBuildingId) return;
 
-    addRoom(newRoomName, newRoomScreenStatus, newRoomInitialNote, selectedBuildingId);
+    addRoom(
+      newRoomName.trim(),
+      newRoomScreenStatus,
+      newRoomInitialNote.trim() || undefined,
+      selectedBuildingId,
+      newRoomLayout,
+      Number(newRoomTotalDevices) || 20
+    );
     setNewRoomName('');
     setNewRoomInitialNote('');
     setNewRoomScreenStatus('تعمل بامتياز');
+    setNewRoomLayout('u-shape');
+    setNewRoomTotalDevices(20);
     setShowAddRoomModal(false);
   };
 
@@ -360,6 +371,21 @@ export const RoomsList: React.FC = () => {
                         <ExternalLink className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </h3>
 
+                      {/* Room Layout & Devices Badges */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
+                          <Monitor className="w-3 h-3" />
+                          <span>{room.devices?.length || room.totalDevices || 20} جهاز</span>
+                        </span>
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {room.layoutType === 'two-rows'
+                            ? 'صفين متقابلين'
+                            : room.layoutType === 'four-rows'
+                            ? 'أربعة صفوف'
+                            : 'مخطط حرف U'}
+                        </span>
+                      </div>
+
                       {/* Direct Notes Trigger Button on card */}
                       <div className="mt-3">
                         <button
@@ -480,6 +506,76 @@ export const RoomsList: React.FC = () => {
                       <option value="مكسورة">مكسورة</option>
                       <option value="لا توجد شاشة">لا توجد شاشة</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      عدد الأجهزة الإجمالي <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={120}
+                      value={newRoomTotalDevices}
+                      onChange={(e) => setNewRoomTotalDevices(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      سيتم توزيع الأجهزة وترقيمها تلقائياً على المخطط (PC-01, PC-02...)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      المخطط الهندسي لتوزيع الأجهزة <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewRoomLayout('u-shape')}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                          newRoomLayout === 'u-shape'
+                            ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/30 font-bold'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="text-xs">مخطط حرف U</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          توزيع على الأطراف
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewRoomLayout('two-rows')}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                          newRoomLayout === 'two-rows'
+                            ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/30 font-bold'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="text-xs">صفين متقابلين</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          يمين ويسار وممر وسط
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewRoomLayout('four-rows')}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                          newRoomLayout === 'four-rows'
+                            ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/30 font-bold'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="text-xs">أربعة صفوف</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          للمختبرات الكبيرة
+                        </div>
+                      </button>
+                    </div>
                   </div>
 
                   <div>

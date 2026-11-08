@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import type { ScreenStatus, OperationCategory, MaintenanceLog } from '../types';
 import { SCREEN_STATUS_CONFIG } from './RoomsList';
 import { RoomNotesModal } from './RoomNotesModal';
+import { InteractiveRoomMap } from './InteractiveRoomMap';
 import {
   Building2,
   X,
@@ -19,6 +20,8 @@ import {
   Edit2,
   Check,
   Sparkles,
+  Monitor,
+  Layers,
 } from 'lucide-react';
 
 export const RoomModal: React.FC = () => {
@@ -36,6 +39,7 @@ export const RoomModal: React.FC = () => {
     exportLogsToExcel,
   } = useApp();
 
+  const [activeModalTab, setActiveModalTab] = useState<'map' | 'logs'>('map');
   const [notesModalOpen, setNotesModalOpen] = useState(false);
 
   // Operation inline editing state
@@ -133,7 +137,7 @@ export const RoomModal: React.FC = () => {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 overflow-y-auto no-print">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full my-auto shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-5xl w-full my-auto shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
           
           {/* Modal Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60">
@@ -169,8 +173,59 @@ export const RoomModal: React.FC = () => {
             </div>
           </div>
 
+          {/* View Switcher Tabs */}
+          <div className="flex items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <button
+              onClick={() => setActiveModalTab('map')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeModalTab === 'map'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Monitor className="w-4 h-4" />
+              <span>المخطط البصري للأجهزة</span>
+              {room.devices && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] ${
+                    activeModalTab === 'map'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  {room.devices.length} جهاز
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveModalTab('logs')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeModalTab === 'logs'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>سجل العمليات والتقارير</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] ${
+                  activeModalTab === 'logs'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {roomLogs.length}
+              </span>
+            </button>
+          </div>
+
           {/* Modal Body */}
           <div className="p-6 overflow-y-auto space-y-6">
+            {activeModalTab === 'map' ? (
+              <InteractiveRoomMap room={room} />
+            ) : (
+              <>
             
             {/* 1. Live Room Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -478,6 +533,8 @@ export const RoomModal: React.FC = () => {
                 </div>
               )}
             </div>
+            </>
+            )}
 
           </div>
 

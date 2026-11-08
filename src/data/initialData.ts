@@ -1,4 +1,27 @@
-import type { Building, Room, MaintenanceLog } from '../types';
+import type { Building, Room, MaintenanceLog, RoomDevice, DeviceStatus } from '../types';
+
+export const createDefaultDevices = (
+  roomId: string,
+  count: number,
+  defaultStatus: DeviceStatus = 'لم يتم العمل عليه',
+  brand = 'Dell OptiPlex'
+): RoomDevice[] => {
+  return Array.from({ length: count }, (_, i) => {
+    const num = String(i + 1).padStart(2, '0');
+    let status: DeviceStatus = defaultStatus;
+    if (i % 5 === 0) status = 'تم تحديثه';
+    else if (i % 7 === 0) status = 'يحتاج صيانة';
+
+    return {
+      id: `dev-${roomId}-${i + 1}`,
+      tag: `PC-${num}`,
+      status,
+      brand,
+      ram: status === 'تم تحديثه' ? '16GB' : '8GB',
+      storage: '512GB SSD',
+    };
+  });
+};
 
 export const INITIAL_BUILDINGS: Building[] = [
   {
@@ -27,6 +50,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-1',
     name: 'قاعة المؤتمرات الرئيسية',
     screenStatus: 'تعمل بامتياز',
+    layoutType: 'u-shape',
+    totalDevices: 12,
+    devices: createDefaultDevices('room-1', 12, 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-1',
@@ -42,6 +68,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-1',
     name: 'قاعة الاجتماعات التنفيذية (VIP)',
     screenStatus: 'تعمل بامتياز',
+    layoutType: 'u-shape',
+    totalDevices: 10,
+    devices: createDefaultDevices('room-6', 10, 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-6',
@@ -57,6 +86,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-2',
     name: 'معمل الحاسب المتقدم (101)',
     screenStatus: 'تعمل بامتياز',
+    layoutType: 'four-rows',
+    totalDevices: 24,
+    devices: createDefaultDevices('room-2', 24, 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-2',
@@ -72,6 +104,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-2',
     name: 'قاعة التدريب والتطوير (B-20)',
     screenStatus: 'تحتاج صيانة',
+    layoutType: 'two-rows',
+    totalDevices: 16,
+    devices: createDefaultDevices('room-3', 16, 'لم يتم العمل عليه'),
     roomNotes: [
       {
         id: 'note-3',
@@ -87,6 +122,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-2',
     name: 'معمل الشبكات والأنظمة (204)',
     screenStatus: 'لا توجد شاشة',
+    layoutType: 'two-rows',
+    totalDevices: 14,
+    devices: createDefaultDevices('room-5', 14, 'لم يتم العمل عليه'),
     roomNotes: [
       {
         id: 'note-5',
@@ -102,6 +140,9 @@ export const INITIAL_ROOMS: Room[] = [
     buildingId: 'bldg-3',
     name: 'مركز العمليات والتحكم (NOC)',
     screenStatus: 'تعمل بامتياز',
+    layoutType: 'u-shape',
+    totalDevices: 8,
+    devices: createDefaultDevices('room-4', 8, 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-4',
