@@ -477,45 +477,45 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
         {/* Middle Area: Devices arranged according to room.layoutType */}
         <div className="flex-1 flex items-center justify-center py-2">
           
-          {/* LAYOUT 1: U-Shape (شكل حرف U) */}
+          {/* LAYOUT 1: U-Shape (شكل حرف U - أضلاع مستقيمة منتظمة) */}
           {(room.layoutType === 'u-shape' || !room.layoutType) && (
-            <div className="w-full max-w-4xl space-y-3">
-              {/* Top Edge (Directly in front of board / screen) */}
+            <div className="w-full max-w-4xl space-y-4">
+              {/* Top Edge: خط مستقيم أفقي تماماً مواجه للشاشة */}
               <div className="w-full flex flex-col items-center">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">
-                  الصف العلوي المقابل للشاشة ({uShapePartitions.top.length} أجهزة)
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+                  الصف العلوي ({uShapePartitions.top.length} أجهزة - خط مستقيم)
                 </span>
-                <div className="flex flex-wrap items-center justify-center gap-2 p-2 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 max-w-full">
+                <div className="flex items-center justify-center gap-2 p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 overflow-x-auto max-w-full">
                   {uShapePartitions.top.map(renderDeviceNode)}
                 </div>
               </div>
 
               {/* Middle Section: Left Wing, Central Spacious Area, Right Wing */}
-              <div className="w-full flex items-start justify-between gap-3 min-h-[160px]">
-                {/* Left Wing (Vertical desk / counter) */}
-                <div className="flex flex-col items-center p-2 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 whitespace-nowrap">
+              <div className="w-full flex items-start justify-between gap-4 min-h-[200px]">
+                {/* Left Wing: خط مستقيم رأسي تماماً (عمود واحد) */}
+                <div className="flex flex-col items-center p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 shrink-0">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
                     الجناح الأيسر ({uShapePartitions.left.length})
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="flex flex-col items-center gap-2">
                     {uShapePartitions.left.map(renderDeviceNode)}
                   </div>
                 </div>
 
                 {/* Open Center Space */}
-                <div className="flex-1 flex flex-col items-center justify-center self-stretch p-3 text-center min-w-[120px]">
-                  <div className="w-full max-w-[240px] p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold space-y-1">
+                <div className="flex-1 flex flex-col items-center justify-center self-stretch p-4 text-center min-w-[140px]">
+                  <div className="w-full max-w-[280px] p-4 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold space-y-1">
                     <div>مساحة القاعة المركزية (حرف U)</div>
-                    <div className="text-[10px] text-slate-400 font-normal">ممر حركة للطلاب والمدرب</div>
+                    <div className="text-[10px] text-slate-400 font-normal">ممر حركة وسطي مفتوح للطلاب والمدرب</div>
                   </div>
                 </div>
 
-                {/* Right Wing (Vertical desk / counter) */}
-                <div className="flex flex-col items-center p-2 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 whitespace-nowrap">
+                {/* Right Wing: خط مستقيم رأسي تماماً (عمود واحد) */}
+                <div className="flex flex-col items-center p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 shrink-0">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
                     الجناح الأيمن ({uShapePartitions.right.length})
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="flex flex-col items-center gap-2">
                     {uShapePartitions.right.map(renderDeviceNode)}
                   </div>
                 </div>
