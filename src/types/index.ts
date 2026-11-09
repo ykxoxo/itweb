@@ -8,10 +8,14 @@ export type OperationCategory =
   | 'صيانة عامة' 
   | 'استبدال' 
   | 'ترقية رام' 
+  | 'تبديل هاردسك'
+  | 'تبديل باور سبلاي'
   | 'شاشات';
 
 export type GeneralMaintenanceSubType = 
   | 'أجهزة' 
+  | 'هاردسكات'
+  | 'باور سبلاي'
   | 'شبكة' 
   | 'شاشات' 
   | 'تنظيم' 
@@ -20,6 +24,8 @@ export type GeneralMaintenanceSubType =
 
 export type ReplacementSubType = 
   | 'أجهزة' 
+  | 'هاردسكات'
+  | 'باور سبلاي'
   | 'شاشات' 
   | 'ماوسات' 
   | 'كيبوردات';
@@ -28,6 +34,14 @@ export interface DeviceSpec {
   nameOrBrand?: string;
   ram?: string;
   storage?: string;
+  powerSupply?: string;
+}
+
+export interface DeviceNote {
+  id: string;
+  text: string;
+  date: string;
+  createdAt: string;
 }
 
 export interface RoomNote {
@@ -60,8 +74,10 @@ export interface RoomDevice {
   status: DeviceStatus;
   brand?: string;
   ram?: string;
-  storage?: string;
+  storage?: string; // سعة ونوع الهاردسك (مثل 512GB SSD)
+  powerSupply?: string; // حالة ونوع الباور سبلاي (مثل 500W أصلي أو تم استبداله)
   notes?: string;
+  deviceNotes?: DeviceNote[]; // سجل الملاحظات المتعددة الخاص بكل جهاز
   lastMaintenanceDate?: string;
 }
 
@@ -101,6 +117,10 @@ export interface MaintenanceLog {
   // RAM Upgrade Specs
   previousRam?: string;
   newRam?: string;
+
+  // Storage & Power Supply Specs
+  hardDrive?: string;
+  powerSupply?: string;
   
   // Specific device tags if linked to visual map
   deviceTags?: string[];

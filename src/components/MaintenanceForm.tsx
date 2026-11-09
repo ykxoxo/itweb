@@ -371,6 +371,8 @@ export const MaintenanceForm: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 {[
                   { id: 'أجهزة' as ReplacementSubType, label: 'أجهزة', icon: <HardDrive className="w-4 h-4" /> },
+                  { id: 'هاردسكات' as ReplacementSubType, label: 'هاردسكات (SSD/HDD)', icon: <HardDrive className="w-4 h-4" /> },
+                  { id: 'باور سبلاي' as ReplacementSubType, label: 'باور سبلاي (PSU)', icon: <Zap className="w-4 h-4" /> },
                   { id: 'شاشات' as ReplacementSubType, label: 'شاشات', icon: <Monitor className="w-4 h-4" /> },
                   { id: 'ماوسات' as ReplacementSubType, label: 'ماوسات', icon: <Mouse className="w-4 h-4" /> },
                   { id: 'كيبوردات' as ReplacementSubType, label: 'كيبوردات', icon: <Keyboard className="w-4 h-4" /> },

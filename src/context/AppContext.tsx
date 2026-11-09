@@ -12,6 +12,7 @@ import type {
   RoomDevice,
   RoomLayoutType,
   DeviceStatus,
+  DeviceNote,
   GeneralMaintenanceSubType,
   ReplacementSubType,
 } from '../types';
@@ -57,6 +58,8 @@ interface AppContextType {
   deleteRoom: (id: string) => void;
   // Room Map & Devices actions
   updateRoomDevice: (roomId: string, deviceId: string, updates: Partial<RoomDevice>) => void;
+  addDeviceNote: (roomId: string, deviceId: string, text: string) => void;
+  deleteDeviceNote: (roomId: string, deviceId: string, noteId: string) => void;
   bulkUpdateDevices: (
     roomId: string,
     deviceIds: string[],
@@ -67,7 +70,10 @@ interface AppContextType {
       replacementSubType?: ReplacementSubType;
       previousRam?: string;
       newRam?: string;
+      hardDrive?: string;
+      powerSupply?: string;
       deviceBrand?: string;
+      noteToAppend?: string;
       actionDetails?: string;
       executorName?: string;
     }
@@ -437,7 +443,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('تم تحديث بيانات الجهاز بنجاح', 'success');
   }, [showToast]);
 
+  const addDeviceNote = useCallback((roomId: string, deviceId: string, text: string) => {
+    if (!text.trim()) return;
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
+    const newNote: DeviceNote = {
+      id: `dnote-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      text: text.trim(),
+      date: formattedDate,
+      createdAt: now.toISOString(),
+    };
+
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const updatedDevices = (r.devices || []).map((d) => {
+          if (d.id !== deviceId) return d;
+          return {
+            ...d,
+            deviceNotes: [newNote, ...(d.deviceNotes || [])],
+          };
+        });
+        return { ...r, devices: updatedDevices };
+      })
+    );
+    showToast('تمت إضافة الملاحظة على الجهاز بنجاح', 'success');
+  }, [showToast]);
+
+  const deleteDeviceNote = useCallback((roomId: string, deviceId: string, noteId: string) => {
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const updatedDevices = (r.devices || []).map((d) => {
+          if (d.id !== deviceId) return d;
+          return {
+            ...d,
+            deviceNotes: (d.deviceNotes || []).filter((n) => n.id !== noteId),
+          };
+        });
+        return { ...r, devices: updatedDevices };
+      })
+    );
+    showToast('تم حذف ملاحظة الجهاز', 'info');
+  }, [showToast]);
 
   const addLog = useCallback((logData: Omit<MaintenanceLog, 'id' | 'createdAt'>): MaintenanceLog => {
     const newLog: MaintenanceLog = {
@@ -472,7 +527,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       replacementSubType?: ReplacementSubType;
       previousRam?: string;
       newRam?: string;
+      hardDrive?: string;
+      powerSupply?: string;
       deviceBrand?: string;
+      noteToAppend?: string;
       actionDetails?: string;
       executorName?: string;
     }
@@ -486,17 +544,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .filter((d) => deviceIdSet.has(d.id))
       .map((d) => d.tag);
 
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     setRooms((prev) =>
       prev.map((r) => {
         if (r.id !== roomId) return r;
         const updatedDevices = (r.devices || []).map((d) => {
           if (deviceIdSet.has(d.id)) {
+            const extraNote: DeviceNote | null = details?.noteToAppend?.trim()
+              ? {
+                  id: `dnote-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                  text: details.noteToAppend.trim(),
+                  date: formattedDate,
+                  createdAt: now.toISOString(),
+                }
+              : null;
+
             return {
               ...d,
               status: newStatus,
               ram: details?.newRam || d.ram,
+              storage: details?.hardDrive || d.storage,
+              powerSupply: details?.powerSupply || d.powerSupply,
               brand: details?.deviceBrand || d.brand,
-              lastMaintenanceDate: new Date().toISOString().split('T')[0],
+              deviceNotes: extraNote ? [extraNote, ...(d.deviceNotes || [])] : (d.deviceNotes || []),
+              lastMaintenanceDate: now.toISOString().split('T')[0],
             };
           }
           return d;
@@ -516,6 +595,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deviceBrand: details?.deviceBrand,
       previousRam: details?.previousRam,
       newRam: details?.newRam,
+      hardDrive: details?.hardDrive,
+      powerSupply: details?.powerSupply,
       deviceTags: affectedTags,
       actionDetails: details?.actionDetails || `إجراء مجمع على (${deviceIds.length}) أجهزة: [${affectedTags.join(', ')}]`,
       executorName: details?.executorName || 'الفريق الفني',
@@ -549,6 +630,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               status: 'لم يتم العمل عليه' as DeviceStatus,
               ram: '16GB',
               storage: '512GB SSD',
+              powerSupply: 'سليم (500W)',
+              deviceNotes: [],
             };
           });
           currentDevices = [...currentDevices, ...newDevices];
@@ -783,6 +866,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateRoom,
     deleteRoom,
     updateRoomDevice,
+    addDeviceNote,
+    deleteDeviceNote,
     bulkUpdateDevices,
     updateRoomLayoutAndCount,
     addRoomNote,
@@ -818,6 +903,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateRoom,
     deleteRoom,
     updateRoomDevice,
+    addDeviceNote,
+    deleteDeviceNote,
     bulkUpdateDevices,
     updateRoomLayoutAndCount,
     addRoomNote,

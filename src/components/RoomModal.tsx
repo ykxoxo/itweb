@@ -221,7 +221,7 @@ export const RoomModal: React.FC = () => {
           </div>
 
           {/* Modal Body */}
-          <div className="p-6 overflow-y-auto space-y-6">
+          <div className="p-3 sm:p-5 overflow-y-auto space-y-5">
             {activeModalTab === 'map' ? (
               <InteractiveRoomMap room={room} />
             ) : (

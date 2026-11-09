@@ -19,6 +19,8 @@ export const createDefaultDevices = (
       brand,
       ram: status === 'تم تحديثه' ? '16GB' : '8GB',
       storage: '512GB SSD',
+      powerSupply: 'سليم (500W)',
+      deviceNotes: [],
     };
   });
 };
