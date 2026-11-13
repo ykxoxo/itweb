@@ -38,6 +38,8 @@ import {
   Trash2,
   Calendar,
   FileText,
+  ArrowLeft,
+  ArrowRight,
 } from 'lucide-react';
 
 interface InteractiveRoomMapProps {
@@ -371,6 +373,69 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
     );
   };
 
+  // Helper renderer for a single straight vertical row column with aisle-facing direction arrow
+  const renderStraightColumn = (
+    title: string,
+    columnDevices: RoomDevice[],
+    facing: 'left' | 'right',
+    variant: 'wall' | 'island' = 'wall'
+  ) => (
+    <div
+      className={`flex flex-col items-center p-2 sm:p-2.5 rounded-2xl border shrink-0 ${
+        variant === 'island'
+          ? 'bg-slate-200/75 dark:bg-slate-900/80 border-slate-300 dark:border-slate-700 shadow-xs'
+          : 'bg-slate-200/50 dark:bg-slate-900/60 border-slate-300/60 dark:border-slate-800'
+      }`}
+    >
+      <div
+        dir="rtl"
+        className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-2 whitespace-nowrap px-1 text-center"
+      >
+        {title} ({columnDevices.length})
+      </div>
+
+      {columnDevices.length === 0 ? (
+        <div dir="rtl" className="text-[10px] text-slate-400 dark:text-slate-500 py-6 px-2 text-center">
+          لا توجد أجهزة
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          {columnDevices.map((device) => (
+            <div key={device.id} className="flex items-center gap-1">
+              {facing === 'left' && (
+                <ArrowLeft
+                  className="w-3.5 h-3.5 text-emerald-600/80 dark:text-emerald-400/80 shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              {renderDeviceNode(device)}
+              {facing === 'right' && (
+                <ArrowRight
+                  className="w-3.5 h-3.5 text-emerald-600/80 dark:text-emerald-400/80 shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Helper renderer for a vertical dashed walkway divider between device rows
+  const renderAisleDivider = (label: string, minWidthClass = 'min-w-[44px] sm:min-w-[68px]') => (
+    <div className={`flex-1 ${minWidthClass} flex flex-col items-center justify-center self-stretch px-1`}>
+      <div className="flex-1 w-px border-r-2 border-dashed border-slate-300 dark:border-slate-700 min-h-[48px]" />
+      <span
+        dir="rtl"
+        className="text-[9px] font-bold text-slate-400 dark:text-slate-500 my-1.5 whitespace-nowrap bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-800"
+      >
+        {label}
+      </span>
+      <div className="flex-1 w-px border-r-2 border-dashed border-slate-300 dark:border-slate-700 min-h-[48px]" />
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {/* 1. Header Toolbar: Legend, Bulk Action & Room Settings */}
@@ -463,13 +528,19 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
         </div>
       )}
 
-      {/* 3. The Visual Room Floor Canvas */}
-      <div className="relative bg-slate-100/70 dark:bg-slate-950/70 p-4 sm:p-6 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-800 min-h-[440px] flex flex-col justify-between overflow-x-auto">
+      {/* 3. The Visual Room Floor Canvas (LTR geometry so physical left/right match the room map) */}
+      <div
+        dir="ltr"
+        className="relative bg-slate-100/70 dark:bg-slate-950/70 p-4 sm:p-6 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-800 min-h-[440px] flex flex-col justify-between overflow-x-auto"
+      >
         
         {/* Top Landmark: Smart Screen / Whiteboard in front */}
         <div className="w-full flex justify-center mb-4">
-          <div className="px-5 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-extrabold flex items-center gap-2 shadow-sm border border-slate-700">
-            <Monitor className="w-4 h-4 text-blue-400" />
+          <div
+            dir="rtl"
+            className="px-5 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-extrabold flex items-center gap-2 shadow-sm border border-slate-700"
+          >
+            <Monitor className="w-4 h-4 text-blue-400 shrink-0" />
             <span>الشاشة الرئيسية / مقدمة القاعة (Smart Screen / Whiteboard)</span>
           </div>
         </div>
@@ -482,7 +553,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
             <div className="w-full max-w-4xl space-y-4">
               {/* Top Edge: خط مستقيم أفقي تماماً مواجه للشاشة */}
               <div className="w-full flex flex-col items-center">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+                <span dir="rtl" className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
                   الصف العلوي ({uShapePartitions.top.length} أجهزة - خط مستقيم)
                 </span>
                 <div className="flex items-center justify-center gap-2 p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 overflow-x-auto max-w-full">
@@ -494,7 +565,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
               <div className="w-full flex items-start justify-between gap-4 min-h-[200px]">
                 {/* Left Wing: خط مستقيم رأسي تماماً (عمود واحد) */}
                 <div className="flex flex-col items-center p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 shrink-0">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
+                  <span dir="rtl" className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
                     الجناح الأيسر ({uShapePartitions.left.length})
                   </span>
                   <div className="flex flex-col items-center gap-2">
@@ -504,7 +575,10 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
                 {/* Open Center Space */}
                 <div className="flex-1 flex flex-col items-center justify-center self-stretch p-4 text-center min-w-[140px]">
-                  <div className="w-full max-w-[280px] p-4 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold space-y-1">
+                  <div
+                    dir="rtl"
+                    className="w-full max-w-[280px] p-4 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold space-y-1"
+                  >
                     <div>مساحة القاعة المركزية (حرف U)</div>
                     <div className="text-[10px] text-slate-400 font-normal">ممر حركة وسطي مفتوح للطلاب والمدرب</div>
                   </div>
@@ -512,7 +586,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
                 {/* Right Wing: خط مستقيم رأسي تماماً (عمود واحد) */}
                 <div className="flex flex-col items-center p-2.5 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800 shrink-0">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
+                  <span dir="rtl" className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 whitespace-nowrap">
                     الجناح الأيمن ({uShapePartitions.right.length})
                   </span>
                   <div className="flex flex-col items-center gap-2">
@@ -523,82 +597,41 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
             </div>
           )}
 
-          {/* LAYOUT 2: Two Rows (صفين متقابلين) */}
+          {/* LAYOUT 2: Two Rows (صفين متقابلين - عمودان مستقيمان) */}
           {room.layoutType === 'two-rows' && (
-            <div className="w-full max-w-4xl flex items-start justify-between gap-6 min-h-[180px]">
-              {/* Left Column */}
-              <div className="flex-1">
-                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-1.5 text-center">
-                  الصف الأيسر ({twoRowsPartitions.left.length})
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                  {twoRowsPartitions.left.map(renderDeviceNode)}
-                </div>
-              </div>
+            <div className="w-full max-w-3xl mx-auto flex items-stretch justify-between gap-3 sm:gap-6 min-h-[220px]">
+              {/* Left Straight Column (facing right → toward center walkway) */}
+              {renderStraightColumn('الصف الأيسر', twoRowsPartitions.left, 'right', 'wall')}
 
               {/* Central Walkway */}
-              <div className="h-full flex flex-col items-center justify-center px-2 self-stretch">
-                <div className="h-full w-px border-r-2 border-dashed border-slate-300 dark:border-slate-700 min-h-[120px]" />
-                <span className="text-[9px] font-bold text-slate-400 my-1.5 whitespace-nowrap bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-800">
-                  ممر رئيسي
-                </span>
-                <div className="h-full w-px border-r-2 border-dashed border-slate-300 dark:border-slate-700 min-h-[120px]" />
-              </div>
+              {renderAisleDivider('ممر رئيسي', 'min-w-[72px] sm:min-w-[120px]')}
 
-              {/* Right Column */}
-              <div className="flex-1">
-                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-1.5 text-center">
-                  الصف الأيمن ({twoRowsPartitions.right.length})
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-slate-200/50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                  {twoRowsPartitions.right.map(renderDeviceNode)}
-                </div>
-              </div>
+              {/* Right Straight Column (facing left ← toward center walkway) */}
+              {renderStraightColumn('الصف الأيمن', twoRowsPartitions.right, 'left', 'wall')}
             </div>
           )}
 
-          {/* LAYOUT 3: Four Rows (أربعة صفوف - للمختبرات الكبيرة) */}
+          {/* LAYOUT 3: Four Rows (أربعة صفوف مستقيمة: جدار يسار | ممر | صفين متقابلين بالوسط | ممر | جدار يمين) */}
           {room.layoutType === 'four-rows' && (
-            <div className="w-full max-w-5xl grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Column 1: Far Left */}
-              <div className="bg-slate-200/50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-center">
-                  أقصى اليسار ({fourRowsPartitions.col1.length})
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {fourRowsPartitions.col1.map(renderDeviceNode)}
-                </div>
+            <div className="w-full max-w-4xl min-w-[500px] mx-auto flex flex-row items-stretch justify-between gap-2 sm:gap-3 min-h-[220px]">
+              {/* Far Left Wall Column (facing right → into left aisle) */}
+              {renderStraightColumn('أقصى اليسار', fourRowsPartitions.col4, 'right', 'wall')}
+
+              {/* Left Aisle */}
+              {renderAisleDivider('ممر يسار')}
+
+              {/* Center Island: Center-Left (←) back-to-back with Center-Right (→) */}
+              <div className="flex items-stretch justify-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-3xl bg-slate-200/40 dark:bg-slate-900/40 border border-dashed border-slate-300/80 dark:border-slate-700/80 shrink-0">
+                {renderStraightColumn('وسط يسار', fourRowsPartitions.col3, 'left', 'island')}
+                <div className="w-px self-stretch my-6 bg-slate-300 dark:bg-slate-700" aria-hidden="true" />
+                {renderStraightColumn('وسط يمين', fourRowsPartitions.col2, 'right', 'island')}
               </div>
 
-              {/* Column 2: Center Left */}
-              <div className="bg-slate-200/50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-center">
-                  وسط يسار ({fourRowsPartitions.col2.length})
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {fourRowsPartitions.col2.map(renderDeviceNode)}
-                </div>
-              </div>
+              {/* Right Aisle */}
+              {renderAisleDivider('ممر يمين')}
 
-              {/* Column 3: Center Right */}
-              <div className="bg-slate-200/50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-center">
-                  وسط يمين ({fourRowsPartitions.col3.length})
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {fourRowsPartitions.col3.map(renderDeviceNode)}
-                </div>
-              </div>
-
-              {/* Column 4: Far Right */}
-              <div className="bg-slate-200/50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-300/60 dark:border-slate-800">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-center">
-                  أقصى اليمين ({fourRowsPartitions.col4.length})
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {fourRowsPartitions.col4.map(renderDeviceNode)}
-                </div>
-              </div>
+              {/* Far Right Wall Column (facing left ← into right aisle) */}
+              {renderStraightColumn('أقصى اليمين', fourRowsPartitions.col1, 'left', 'wall')}
             </div>
           )}
 
@@ -609,22 +642,28 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
             - Instructor Desk (مكتب المدرب) at bottom-right */}
         <div className="w-full flex items-center justify-between pt-4 border-t-2 border-slate-200 dark:border-slate-800 mt-4 gap-3">
           
-          {/* Fixed Landmark: Door */}
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-100/80 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-black shadow-xs">
-            <DoorClosed className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+          {/* Fixed Landmark: Door (Bottom-Left) */}
+          <div
+            dir="rtl"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-100/80 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-black shadow-xs"
+          >
+            <DoorClosed className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
             <div className="text-right">
               <div>باب القاعة (Door)</div>
               <span className="text-[9px] text-amber-700/80 dark:text-amber-300/80 font-normal">مدخل ومخرج القاعة</span>
             </div>
           </div>
 
-          <div className="hidden sm:block text-slate-400 text-[10px] font-bold">
+          <div dir="rtl" className="hidden sm:block text-slate-400 text-[10px] font-bold">
             اتجاهات القاعة مضبوطة هندسياً 🧭
           </div>
 
-          {/* Fixed Landmark: Instructor Desk */}
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-100/80 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-200 text-xs font-black shadow-xs">
-            <UserCheck className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+          {/* Fixed Landmark: Instructor Desk (Bottom-Right) */}
+          <div
+            dir="rtl"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-100/80 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-200 text-xs font-black shadow-xs"
+          >
+            <UserCheck className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0" />
             <div className="text-right">
               <div>مكتب المدرب (Instructor)</div>
               <span className="text-[9px] text-blue-700/80 dark:text-blue-300/80 font-normal">محطة التحكم والعرض</span>
@@ -1236,12 +1275,12 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
                     {
                       id: 'two-rows' as RoomLayoutType,
                       title: 'صفين متقابلين',
-                      desc: 'عمودين وممر مركزي مفتوح',
+                      desc: 'صفان مستقيمان وممر مركزي مفتوح',
                     },
                     {
                       id: 'four-rows' as RoomLayoutType,
                       title: 'أربعة صفوف',
-                      desc: '4 أعمدة للمختبرات الكبيرة',
+                      desc: '4 صفوف مستقيمة (صفان على الجدارين وصفان متقابلان بالوسط)',
                     },
                   ].map((lt) => {
                     const isSelected = settingsLayoutType === lt.id;
