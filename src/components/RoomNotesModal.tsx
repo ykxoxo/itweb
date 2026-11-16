@@ -158,27 +158,30 @@ export const RoomNotesModal: React.FC<RoomNotesModalProps> = ({ roomId, onClose 
   const { rooms, addRoomNote, deleteRoomNote, updateRoomNote } = useApp();
   const [isAdding, setIsAdding] = useState(false);
 
-  if (!roomId) return null;
-
-  const room = rooms.find((r) => r.id === roomId);
-  if (!room) return null;
-
-  const notes = room.roomNotes || [];
+  const room = roomId ? rooms.find((r) => r.id === roomId) : undefined;
+  const targetRoomId = room?.id;
 
   const handleAddSubmit = useCallback((text: string) => {
-    addRoomNote(room.id, text);
+    if (!targetRoomId) return;
+    addRoomNote(targetRoomId, text);
     setIsAdding(false);
-  }, [addRoomNote, room.id]);
+  }, [addRoomNote, targetRoomId]);
 
   const handleDelete = useCallback((noteId: string) => {
+    if (!targetRoomId) return;
     if (window.confirm('هل أنت متأكد من حذف هذه الملاحظة؟')) {
-      deleteRoomNote(room.id, noteId);
+      deleteRoomNote(targetRoomId, noteId);
     }
-  }, [deleteRoomNote, room.id]);
+  }, [deleteRoomNote, targetRoomId]);
 
   const handleUpdate = useCallback((noteId: string, text: string) => {
-    updateRoomNote(room.id, noteId, text);
-  }, [updateRoomNote, room.id]);
+    if (!targetRoomId) return;
+    updateRoomNote(targetRoomId, noteId, text);
+  }, [updateRoomNote, targetRoomId]);
+
+  if (!roomId || !room) return null;
+
+  const notes = room.roomNotes || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 no-print">

@@ -91,6 +91,7 @@ export interface Room {
   layoutType: RoomLayoutType;
   totalDevices: number;
   devices: RoomDevice[];
+  instructorDevice?: RoomDevice; // جهاز مكتب المدرب الخاص بالقاعة
   createdAt: string;
 }
 
@@ -137,14 +138,87 @@ export interface MaintenanceLog {
   assetTag?: string;
 }
 
-export interface SystemStats {
+export type VisitPurpose =
+  | 'صيانة وتنفيذ'
+  | 'جولة تفقدية'
+  | 'بلاغ طارئ'
+  | 'تجهيز ومتابعة';
+
+export interface RoomVisit {
+  id: string;
+  roomId: string;
+  date: string;         // تاريخ الزيارة (YYYY-MM-DD)
+  visitorName?: string; // اسم الفني / الزائر
+  purpose: VisitPurpose;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface OutputCounters {
   totalOperations: number;
-  devicesMaintained: number; // كم جهاز تم صيانته بشكل عام
-  devicesUpgraded: number;   // كم جهاز تم ترقيته
-  devicesUpdated: number;    // كم جهاز تحدّث
-  devicesReplaced: number;   // كم جهاز تم استبداله
-  itemsReplaced: number;     // كم قطعة استبدلت (ماوسات، كيبوردات، شاشات)
-  screensCount: number;      // عمليات الشاشات
+  devicesMaintained: number;     // أجهزة تمت صيانتها
+  devicesUpdated: number;        // أجهزة تم تحديثها
+  devicesUpgraded: number;       // أجهزة تمت ترقيتها (رام)
+  hardDrivesReplaced: number;    // هاردسكات تم تبديلها
+  powerSuppliesReplaced: number; // باور سبلاي تم تبديله
+  devicesReplaced: number;       // أجهزة كاملة مستبدلة
+  screensReplaced: number;       // شاشات تم تبديلها أو تركيبها
+  screensMaintained: number;     // صيانة شاشات
+  screensCount: number;          // إجمالي عمليات الشاشات
+  miceReplaced: number;          // ماوسات مستبدلة
+  keyboardsReplaced: number;     // كيبوردات مستبدلة
+  itemsReplaced: number;         // إجمالي الملحقات المستبدلة (ماوسات + كيبوردات + أخرى)
+}
+
+export interface AssetsSnapshot {
+  totalInstalledDevices: number;
+  devicesReadyCount: number;
+  devicesNeedMaintenanceCount: number;
+  devicesUntouchedCount: number;
+  readinessPercent: number;
+}
+
+export interface EffectiveVisitRecord {
+  id: string;
+  roomId: string;
+  roomName: string;
+  buildingId: string;
+  buildingName: string;
+  date: string;
+  source: 'صيانة وتنفيذ' | 'جولة تفقدية' | 'مشترك (صيانة + تفقد)';
+  purpose: VisitPurpose;
+  operationsCount: number;
+  executors: string[];
+  notes: string;
+  explicitVisitIds: string[];
+}
+
+export interface RoomReportSummary {
+  room: Room;
+  buildingId: string;
+  buildingName: string;
+  visitsCount: number;
+  explicitVisitsCount: number;
+  lastVisitDate: string | null;
+  outputs: OutputCounters;
+  assets: AssetsSnapshot;
+}
+
+export interface BuildingReportSummary {
+  building: Building;
+  roomsCount: number;
+  visitDaysCount: number;   // عدد أيام الزيارة الفريدة للمبنى
+  roomVisitsTotal: number;  // مجموع زيارات القاعات داخل المبنى
+  lastVisitDate: string | null;
+  screensWorkingCount: number;
+  screensNeedsAttentionCount: number;
+  outputs: OutputCounters;
+  assets: AssetsSnapshot;
+}
+
+export interface SystemStats extends OutputCounters, AssetsSnapshot {
+  totalRoomVisits: number;        // مجموع زيارات القاعات (لكل قاعة يوم فريد = زيارة)
+  totalBuildingVisitDays: number; // مجموع أيام الزيارة الميدانية للمباني
   totalRooms: number;
   totalBuildings: number;
 }

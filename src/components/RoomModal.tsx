@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import type { ScreenStatus, OperationCategory, MaintenanceLog } from '../types';
+import type { ScreenStatus, OperationCategory, MaintenanceLog, VisitPurpose } from '../types';
 import { SCREEN_STATUS_CONFIG } from './RoomsList';
 import { RoomNotesModal } from './RoomNotesModal';
 import { InteractiveRoomMap } from './InteractiveRoomMap';
+import { aggregateReportData, buildCountUpdateFields, getLogSubAndSpecs } from '../utils/reportAggregator';
 import {
   Building2,
   X,
@@ -22,6 +23,10 @@ import {
   Sparkles,
   Monitor,
   Layers,
+  HardDrive,
+  Zap,
+  Plus,
+  ClipboardList,
 } from 'lucide-react';
 
 export const RoomModal: React.FC = () => {
@@ -31,16 +36,25 @@ export const RoomModal: React.FC = () => {
     buildings,
     rooms,
     logs,
+    visits,
     updateRoom,
     updateLog,
     deleteLog,
+    addVisit,
+    deleteVisit,
     setActiveTab,
     setPreselectedRoomIdForLog,
     exportLogsToExcel,
   } = useApp();
 
-  const [activeModalTab, setActiveModalTab] = useState<'map' | 'logs'>('map');
+  const [activeModalTab, setActiveModalTab] = useState<'map' | 'logs' | 'visits'>('map');
   const [notesModalOpen, setNotesModalOpen] = useState(false);
+
+  // Quick Visit form state
+  const [visitDate, setVisitDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [visitPurpose, setVisitPurpose] = useState<VisitPurpose>('جولة تفقدية');
+  const [visitorName, setVisitorName] = useState('');
+  const [visitNotes, setVisitNotes] = useState('');
 
   // Operation inline editing state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -66,26 +80,35 @@ export const RoomModal: React.FC = () => {
     return logs.filter((l) => l.roomId === selectedRoomIdForModal);
   }, [logs, selectedRoomIdForModal]);
 
-  // Memoize room statistics calculation
-  const { roomDevicesMaintained, roomRamUpgrades, roomScreensAndReplacements } = useMemo(() => {
-    let maintained = 0;
-    let ram = 0;
-    let screens = 0;
+  // Unified Room Statistics & Visits (via reportAggregator)
+  const roomAggregated = useMemo(() => {
+    if (!room) return null;
+    return aggregateReportData({
+      buildings,
+      rooms: [room],
+      logs,
+      visits,
+      filters: { roomId: room.id },
+    });
+  }, [buildings, room, logs, visits]);
 
-    for (let i = 0; i < roomLogs.length; i++) {
-      const l = roomLogs[i];
-      const count = Number(l.devicesCount) || 1;
-      if (l.category === 'صيانة عامة') maintained += count;
-      else if (l.category === 'ترقية رام') ram += count;
-      else screens += count;
-    }
+  const roomVisitsCount = roomAggregated?.totalRoomVisits || 0;
+  const roomLastVisitDate = roomAggregated?.byRoom[0]?.lastVisitDate || null;
+  const roomOutputs = roomAggregated?.outputs;
+  const roomEffectiveVisits = roomAggregated?.effectiveVisits || [];
 
-    return {
-      roomDevicesMaintained: maintained,
-      roomRamUpgrades: ram,
-      roomScreensAndReplacements: screens,
-    };
-  }, [roomLogs]);
+  const handleRecordRoomVisit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!room) return;
+    addVisit({
+      roomId: room.id,
+      date: visitDate || new Date().toISOString().split('T')[0],
+      purpose: visitPurpose,
+      visitorName: visitorName.trim() || undefined,
+      notes: visitNotes.trim() || undefined,
+    });
+    setVisitNotes('');
+  };
 
   const handleStatusChange = useCallback((newStatus: ScreenStatus) => {
     if (room) {
@@ -114,17 +137,21 @@ export const RoomModal: React.FC = () => {
     setEditExecutor(log.executorName || '');
     setEditDate(log.date);
     setEditBrand(log.deviceBrand || '');
-    setEditCount(log.devicesCount ? log.devicesCount.toString() : '');
+    setEditCount(
+      log.devicesCount ? log.devicesCount.toString() : log.itemsCount ? log.itemsCount.toString() : ''
+    );
   };
 
   const handleSaveEditLog = (logId: string) => {
     const parsedCount = editCount ? parseInt(editCount, 10) : undefined;
+    const existingLog = logs.find((l) => l.id === logId);
+    const countFields = buildCountUpdateFields(existingLog, editCategory, parsedCount);
     updateLog(logId, {
       category: editCategory,
       actionDetails: editDetails.trim() || undefined,
       executorName: editExecutor.trim() || undefined,
       deviceBrand: editBrand.trim() || undefined,
-      devicesCount: parsedCount,
+      ...countFields,
       date: editDate,
     });
     setEditingLogId(null);
@@ -158,7 +185,9 @@ export const RoomModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  تاريخ التسجيل: {room.createdAt} • إجمالي العمليات: {roomLogs.length}
+                  تاريخ التسجيل: {room.createdAt} • إجمالي العمليات: {roomLogs.length} • عدد الزيارات:{' '}
+                  <strong className="text-emerald-700 dark:text-emerald-400">{roomVisitsCount}</strong>
+                  {roomLastVisitDate ? ` (آخر زيارة: ${roomLastVisitDate})` : ''}
                 </p>
               </div>
             </div>
@@ -193,7 +222,7 @@ export const RoomModal: React.FC = () => {
                       : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  {room.devices.length} جهاز
+                  {room.devices.length + (room.instructorDevice ? 1 : 0)} جهاز
                 </span>
               )}
             </button>
@@ -218,49 +247,270 @@ export const RoomModal: React.FC = () => {
                 {roomLogs.length}
               </span>
             </button>
+
+            <button
+              onClick={() => setActiveModalTab('visits')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeModalTab === 'visits'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>الزيارات التفقدية</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] ${
+                  activeModalTab === 'visits'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {roomVisitsCount}
+              </span>
+            </button>
           </div>
 
           {/* Modal Body */}
           <div className="p-3 sm:p-5 overflow-y-auto space-y-5">
             {activeModalTab === 'map' ? (
               <InteractiveRoomMap room={room} />
+            ) : activeModalTab === 'visits' ? (
+              <div className="space-y-5">
+                {/* Quick Record Inspection Visit Form */}
+                <form
+                  onSubmit={handleRecordRoomVisit}
+                  className="bg-emerald-50/60 dark:bg-emerald-950/30 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                      <ClipboardList className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>تسجيل زيارة ميدانية / تفقدية جديدة للقاعة</span>
+                    </h3>
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                      إجمالي زيارات القاعة: {roomVisitsCount}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        تاريخ الزيارة
+                      </label>
+                      <input
+                        type="date"
+                        value={visitDate}
+                        onChange={(e) => setVisitDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        الغرض من الزيارة
+                      </label>
+                      <select
+                        value={visitPurpose}
+                        onChange={(e) => setVisitPurpose(e.target.value as VisitPurpose)}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold"
+                      >
+                        <option value="جولة تفقدية">جولة تفقدية روتينية</option>
+                        <option value="صيانة وتنفيذ">صيانة وتنفيذ</option>
+                        <option value="بلاغ طارئ">بلاغ طارئ</option>
+                        <option value="تجهيز ومتابعة">تجهيز ومتابعة</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        اسم الزائر / الفني (اختياري)
+                      </label>
+                      <input
+                        type="text"
+                        value={visitorName}
+                        onChange={(e) => setVisitorName(e.target.value)}
+                        placeholder="مثال: أحمد السالم..."
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={visitNotes}
+                      onChange={(e) => setVisitNotes(e.target.value)}
+                      placeholder="ملاحظات الزيارة (مثلاً: فحص جاهزية الأجهزة والشاشة قبل الاختبارات)..."
+                      className="flex-1 px-3.5 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>تسجيل الزيارة</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Room Visit History Table */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      سجل زيارات القاعة ({roomEffectiveVisits.length} زيارة محتسبة)
+                    </h4>
+                    <span className="text-[11px] text-slate-400">
+                      يُحسب كل يوم فريد كزيارة واحدة حتى عند تعدد العمليات فيه
+                    </span>
+                  </div>
+
+                  {roomEffectiveVisits.length === 0 ? (
+                    <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-8 text-center border border-slate-100 dark:border-slate-800 text-xs text-slate-400">
+                      لا توجد زيارات مسجلة لهذه القاعة حتى الآن
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl">
+                      <table className="w-full text-right text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                            <th className="py-2.5 px-3 w-28">تاريخ الزيارة</th>
+                            <th className="py-2.5 px-3 w-36">المصدر / النوع</th>
+                            <th className="py-2.5 px-3 w-28">الغرض</th>
+                            <th className="py-2.5 px-3 w-24 text-center">العمليات</th>
+                            <th className="py-2.5 px-3 w-32">المنفذ / الزائر</th>
+                            <th className="py-2.5 px-3">الملخص والملاحظات</th>
+                            <th className="py-2.5 px-3 w-14 text-center">حذف</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {roomEffectiveVisits.map((ev) => (
+                            <tr key={ev.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
+                              <td className="py-2.5 px-3 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                                {ev.date}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    ev.source === 'جولة تفقدية'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                      : ev.source === 'مشترك (صيانة + تفقد)'
+                                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                                      : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                                  }`}
+                                >
+                                  {ev.source}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 text-[11px]">
+                                {ev.purpose}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-slate-700 dark:text-slate-200">
+                                {ev.operationsCount}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 text-[11px]">
+                                {ev.executors.join('، ') || '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                                {ev.notes}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                {ev.explicitVisitIds.length > 0 ? (
+                                  <button
+                                    onClick={() =>
+                                      ev.explicitVisitIds.forEach((vId, idx) =>
+                                        deleteVisit(vId, { silent: idx > 0 })
+                                      )
+                                    }
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg"
+                                    title="حذف سجل الزيارة التفقدية المسجل يدوياً"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400" title="محتسبة تلقائياً من سجل العمليات">
+                                    تلقائي
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               <>
             
-            {/* 1. Live Room Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* 1. Live Room Outputs Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-900/60">
-                <div className="flex items-center justify-between text-blue-700 dark:text-blue-400 mb-2">
-                  <span className="text-xs font-bold">أجهزة تمت صيانتها</span>
-                  <Wrench className="w-5 h-5" />
+              <div className="bg-blue-50/70 dark:bg-blue-950/30 rounded-2xl p-3 border border-blue-100 dark:border-blue-900/60">
+                <div className="flex items-center justify-between text-blue-700 dark:text-blue-400 mb-1">
+                  <span className="text-[11px] font-bold">صيانة وتحديث</span>
+                  <Wrench className="w-4 h-4" />
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black text-blue-900 dark:text-blue-200">{roomDevicesMaintained}</span>
-                  <span className="text-xs text-blue-600 dark:text-blue-400">جهاز</span>
-                </div>
+                <span className="text-xl font-black text-blue-900 dark:text-blue-200">
+                  {(roomOutputs?.devicesMaintained || 0) + (roomOutputs?.devicesUpdated || 0)}
+                </span>
+                <span className="block text-[10px] text-blue-600/80 dark:text-blue-400">
+                  صيانة: {roomOutputs?.devicesMaintained || 0} • تحديث: {roomOutputs?.devicesUpdated || 0}
+                </span>
               </div>
 
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50/50 dark:from-indigo-950/40 dark:to-purple-950/20 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900/60">
-                <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-400 mb-2">
-                  <span className="text-xs font-bold">ترقيات الرام المنجزة</span>
-                  <Cpu className="w-5 h-5" />
+              <div className="bg-indigo-50/70 dark:bg-indigo-950/30 rounded-2xl p-3 border border-indigo-100 dark:border-indigo-900/60">
+                <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-400 mb-1">
+                  <span className="text-[11px] font-bold">ترقية رام</span>
+                  <Cpu className="w-4 h-4" />
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black text-indigo-900 dark:text-indigo-200">{roomRamUpgrades}</span>
-                  <span className="text-xs text-indigo-600 dark:text-indigo-400">جهاز تم ترقيته</span>
-                </div>
+                <span className="text-xl font-black text-indigo-900 dark:text-indigo-200">
+                  {roomOutputs?.devicesUpgraded || 0}
+                </span>
+                <span className="block text-[10px] text-indigo-600/80 dark:text-indigo-400">جهاز مرقى</span>
               </div>
 
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/40 dark:to-teal-950/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/60">
-                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 mb-2">
-                  <span className="text-xs font-bold">استبدال وشاشات</span>
-                  <Sparkles className="w-5 h-5" />
+              <div className="bg-cyan-50/70 dark:bg-cyan-950/30 rounded-2xl p-3 border border-cyan-100 dark:border-cyan-900/60">
+                <div className="flex items-center justify-between text-cyan-700 dark:text-cyan-400 mb-1">
+                  <span className="text-[11px] font-bold">هاردسكات</span>
+                  <HardDrive className="w-4 h-4" />
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black text-emerald-900 dark:text-emerald-200">{roomScreensAndReplacements}</span>
-                  <span className="text-xs text-emerald-600 dark:text-emerald-400">عملية</span>
+                <span className="text-xl font-black text-cyan-900 dark:text-cyan-200">
+                  {roomOutputs?.hardDrivesReplaced || 0}
+                </span>
+                <span className="block text-[10px] text-cyan-600/80 dark:text-cyan-400">مبدل (SSD/HDD)</span>
+              </div>
+
+              <div className="bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl p-3 border border-amber-100 dark:border-amber-900/60">
+                <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 mb-1">
+                  <span className="text-[11px] font-bold">باور سبلاي</span>
+                  <Zap className="w-4 h-4" />
                 </div>
+                <span className="text-xl font-black text-amber-900 dark:text-amber-200">
+                  {roomOutputs?.powerSuppliesReplaced || 0}
+                </span>
+                <span className="block text-[10px] text-amber-600/80 dark:text-amber-400">وحدة مبدلة</span>
+              </div>
+
+              <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-3 border border-emerald-100 dark:border-emerald-900/60">
+                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 mb-1">
+                  <span className="text-[11px] font-bold">شاشات مبدلة</span>
+                  <Monitor className="w-4 h-4" />
+                </div>
+                <span className="text-xl font-black text-emerald-900 dark:text-emerald-200">
+                  {roomOutputs?.screensReplaced || 0}
+                </span>
+                <span className="block text-[10px] text-emerald-600/80 dark:text-emerald-400">
+                  ملحقات: {roomOutputs?.itemsReplaced || 0}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-3 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 mb-1">
+                  <span className="text-[11px] font-bold">زيارات القاعة</span>
+                  <ClipboardList className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span className="text-xl font-black text-slate-900 dark:text-white">{roomVisitsCount}</span>
+                <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                  {roomLastVisitDate || 'لا توجد زيارات'}
+                </span>
               </div>
 
             </div>
@@ -322,9 +572,14 @@ export const RoomModal: React.FC = () => {
 
                 {roomLogs.length > 0 && (
                   <button
-                    onClick={() => exportLogsToExcel(roomLogs, `سجل_${room.name.replace(/\s+/g, '_')}`)}
+                    onClick={() =>
+                      exportLogsToExcel(roomLogs, `تقرير_${room.name.replace(/\s+/g, '_')}`, {
+                        periodLabel: `${currentBuilding?.name ? `${currentBuilding.name} - ` : ''}${room.name}`,
+                        filters: { roomId: room.id },
+                      })
+                    }
                     className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-800 transition-colors"
-                    title="تصدير سجل هذه القاعة إلى Excel"
+                    title="تصدير تقرير هذه القاعة الشامل إلى Excel"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
                     <span className="hidden sm:inline">Excel</span>
@@ -368,22 +623,7 @@ export const RoomModal: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {roomLogs.map((log) => {
                         const isEditing = editingLogId === log.id;
-
-                        let subAndCount = '-';
-                        if (log.category === 'صيانة عامة' && log.generalSubType) {
-                          subAndCount = `${log.generalSubType} ${log.devicesCount ? `(${log.devicesCount} جهاز)` : ''}`;
-                        } else if (log.category === 'استبدال' && log.replacementSubType) {
-                          subAndCount = `${log.replacementSubType} ${log.devicesCount ? `(${log.devicesCount} جهاز)` : log.itemsCount ? `(${log.itemsCount} قطعة)` : ''}`;
-                        } else if (log.category === 'ترقية رام') {
-                          subAndCount = log.devicesCount ? `${log.devicesCount} جهاز` : 'ترقية رام';
-                        }
-
-                        let specs = log.deviceBrand || '';
-                        if (log.category === 'استبدال' && log.oldDevice && log.newDevice) {
-                          specs = `${log.oldDevice.nameOrBrand || ''} ⬅ ${log.newDevice.nameOrBrand || ''}`;
-                        } else if (log.category === 'ترقية رام' && (log.previousRam || log.newRam)) {
-                          specs = `${log.previousRam || ''} ⬅ ${log.newRam || ''}`;
-                        }
+                        const { subAndCount, specs } = getLogSubAndSpecs(log);
 
                         return (
                           <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
@@ -413,9 +653,11 @@ export const RoomModal: React.FC = () => {
                                   className="p-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold"
                                 >
                                   <option value="صيانة عامة">صيانة عامة</option>
-                                  <option value="استبدال">استبدال</option>
                                   <option value="ترقية رام">ترقية رام</option>
+                                  <option value="تبديل هاردسك">تبديل هاردسك</option>
+                                  <option value="تبديل باور سبلاي">تبديل باور سبلاي</option>
                                   <option value="شاشات">شاشات</option>
+                                  <option value="استبدال">استبدال</option>
                                 </select>
                               ) : (
                                 <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/60">

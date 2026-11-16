@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { createDefaultInstructorDevice } from '../data/initialData';
 import type {
   Room,
   RoomDevice,
@@ -83,6 +84,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
     deleteDeviceNote,
     bulkUpdateDevices,
     updateRoomLayoutAndCount,
+    addLog,
     logs,
   } = useApp();
 
@@ -116,6 +118,9 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
   const [editDeviceStorage, setEditDeviceStorage] = useState('');
   const [editDevicePowerSupply, setEditDevicePowerSupply] = useState('');
   const [editDeviceNotes, setEditDeviceNotes] = useState('');
+  const [editLogAsOperation, setEditLogAsOperation] = useState(true);
+  const [editLogKind, setEditLogKind] = useState<'maintained' | 'updated' | 'ram' | 'hdd' | 'psu'>('maintained');
+  const [editLogExecutor, setEditLogExecutor] = useState('');
   const [newDeviceNoteInput, setNewDeviceNoteInput] = useState('');
 
   // Room Settings Modal State
@@ -126,16 +131,35 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
   const devices = room.devices || [];
 
+  const instructorDevice = useMemo(
+    () => room.instructorDevice || createDefaultInstructorDevice(room.id),
+    [room.instructorDevice, room.id]
+  );
+
+  const allRoomDevices = useMemo(
+    () => [...devices, instructorDevice],
+    [devices, instructorDevice]
+  );
+
   // Active Device derived to keep real-time notes synced without modal closing
   const activeDevice = useMemo(() => {
     if (!selectedDevice) return null;
-    return devices.find((d) => d.id === selectedDevice.id) || selectedDevice;
-  }, [devices, selectedDevice]);
+    return allRoomDevices.find((d) => d.id === selectedDevice.id) || selectedDevice;
+  }, [allRoomDevices, selectedDevice]);
 
-  // Summary counts
-  const updatedCount = useMemo(() => devices.filter((d) => d.status === 'تم تحديثه').length, [devices]);
-  const needsMaintenanceCount = useMemo(() => devices.filter((d) => d.status === 'يحتاج صيانة').length, [devices]);
-  const pendingCount = useMemo(() => devices.filter((d) => d.status === 'لم يتم العمل عليه').length, [devices]);
+  // Summary counts (students + instructor desk PC)
+  const updatedCount = useMemo(
+    () => allRoomDevices.filter((d) => d.status === 'تم تحديثه').length,
+    [allRoomDevices]
+  );
+  const needsMaintenanceCount = useMemo(
+    () => allRoomDevices.filter((d) => d.status === 'يحتاج صيانة').length,
+    [allRoomDevices]
+  );
+  const pendingCount = useMemo(
+    () => allRoomDevices.filter((d) => d.status === 'لم يتم العمل عليه').length,
+    [allRoomDevices]
+  );
 
   // Bulk handlers
   const handleToggleDeviceSelect = (id: string) => {
@@ -145,7 +169,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
   };
 
   const handleSelectAll = () => {
-    setSelectedDeviceIds(devices.map((d) => d.id));
+    setSelectedDeviceIds(allRoomDevices.map((d) => d.id));
   };
 
   const handleDeselectAll = () => {
@@ -165,6 +189,8 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
       defaultActionDetails = `تبديل باور سبلاي: ${bulkPowerSupply}`;
     } else if (bulkCategory === 'صيانة عامة') {
       defaultActionDetails = `صيانة عامة - ${bulkGeneralSubType}`;
+    } else if (bulkCategory === 'شاشات') {
+      defaultActionDetails = `أعمال شاشات (${selectedDeviceIds.length})`;
     } else {
       defaultActionDetails = `استبدال - ${bulkReplacementSubType}`;
     }
@@ -208,12 +234,17 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
     setEditDeviceStorage(device.storage || '512GB SSD');
     setEditDevicePowerSupply(device.powerSupply || 'سليم (500W)');
     setEditDeviceNotes(device.notes || '');
+    setEditLogAsOperation(true);
+    setEditLogKind('maintained');
+    setEditLogExecutor('');
     setNewDeviceNoteInput('');
   };
 
   const handleSaveSingleDevice = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice || !editDeviceTag.trim()) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
 
     updateRoomDevice(room.id, selectedDevice.id, {
       tag: editDeviceTag.trim(),
@@ -223,8 +254,76 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
       storage: editDeviceStorage.trim() || undefined,
       powerSupply: editDevicePowerSupply.trim() || undefined,
       notes: editDeviceNotes.trim() || undefined,
-      lastMaintenanceDate: new Date().toISOString().split('T')[0],
+      lastMaintenanceDate: todayStr,
     });
+
+    if (editLogAsOperation) {
+      const tagLabel = editDeviceTag.trim();
+      if (editLogKind === 'ram') {
+        addLog(
+          {
+            roomId: room.id,
+            category: 'ترقية رام',
+            devicesCount: 1,
+            deviceBrand: editDeviceBrand.trim() || undefined,
+            previousRam: selectedDevice.ram || undefined,
+            newRam: editDeviceRam.trim() || undefined,
+            deviceTags: [tagLabel],
+            actionDetails: editDeviceNotes.trim() || `ترقية رام الجهاز (${tagLabel}) إلى ${editDeviceRam.trim() || 'جديد'}`,
+            executorName: editLogExecutor.trim() || undefined,
+            date: todayStr,
+          },
+          { silent: true }
+        );
+      } else if (editLogKind === 'hdd') {
+        addLog(
+          {
+            roomId: room.id,
+            category: 'تبديل هاردسك',
+            devicesCount: 1,
+            deviceBrand: editDeviceBrand.trim() || undefined,
+            hardDrive: editDeviceStorage.trim() || undefined,
+            deviceTags: [tagLabel],
+            actionDetails: editDeviceNotes.trim() || `تبديل هاردسك الجهاز (${tagLabel}): ${editDeviceStorage.trim() || ''}`,
+            executorName: editLogExecutor.trim() || undefined,
+            date: todayStr,
+          },
+          { silent: true }
+        );
+      } else if (editLogKind === 'psu') {
+        addLog(
+          {
+            roomId: room.id,
+            category: 'تبديل باور سبلاي',
+            devicesCount: 1,
+            deviceBrand: editDeviceBrand.trim() || undefined,
+            powerSupply: editDevicePowerSupply.trim() || undefined,
+            deviceTags: [tagLabel],
+            actionDetails: editDeviceNotes.trim() || `تبديل باور سبلاي الجهاز (${tagLabel}): ${editDevicePowerSupply.trim() || ''}`,
+            executorName: editLogExecutor.trim() || undefined,
+            date: todayStr,
+          },
+          { silent: true }
+        );
+      } else {
+        addLog(
+          {
+            roomId: room.id,
+            category: 'صيانة عامة',
+            generalSubType: editLogKind === 'updated' ? 'تحديث' : 'أجهزة',
+            devicesCount: 1,
+            deviceBrand: editDeviceBrand.trim() || undefined,
+            deviceTags: [tagLabel],
+            actionDetails:
+              editDeviceNotes.trim() ||
+              `${editLogKind === 'updated' ? 'تحديث' : 'صيانة'} الجهاز (${tagLabel}) - الحالة: ${editDeviceStatus}`,
+            executorName: editLogExecutor.trim() || undefined,
+            date: todayStr,
+          },
+          { silent: true }
+        );
+      }
+    }
 
     setSelectedDevice(null);
   };
@@ -460,7 +559,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
           <span className="text-slate-400 font-bold hidden sm:inline">•</span>
           <span className="text-slate-500 dark:text-slate-400 font-bold">
-            الإجمالي: {devices.length} جهاز
+            الإجمالي: {allRoomDevices.length} جهاز ({devices.length} + المدرب)
           </span>
         </div>
 
@@ -499,7 +598,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
         <div className="bg-blue-50 dark:bg-blue-950/80 p-3 sm:p-4 rounded-2xl border-2 border-blue-300 dark:border-blue-700 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
             <span className="text-xs font-extrabold text-blue-900 dark:text-blue-100">
-              تم تحديد ({selectedDeviceIds.length}) من أصل ({devices.length}) جهاز
+              تم تحديد ({selectedDeviceIds.length}) من أصل ({allRoomDevices.length}) جهاز
             </span>
             <div className="flex items-center gap-1.5">
               <button
@@ -658,17 +757,82 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
             اتجاهات القاعة مضبوطة هندسياً 🧭
           </div>
 
-          {/* Fixed Landmark: Instructor Desk (Bottom-Right) */}
-          <div
-            dir="rtl"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-100/80 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-200 text-xs font-black shadow-xs"
-          >
-            <UserCheck className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0" />
-            <div className="text-right">
-              <div>مكتب المدرب (Instructor)</div>
-              <span className="text-[9px] text-blue-700/80 dark:text-blue-300/80 font-normal">محطة التحكم والعرض</span>
-            </div>
-          </div>
+          {/* Fixed Landmark: Instructor Desk + Instructor PC (Bottom-Right, Interactive) */}
+          {(() => {
+            const instStatusCfg =
+              DEVICE_STATUS_CONFIG[instructorDevice.status] || DEVICE_STATUS_CONFIG['لم يتم العمل عليه'];
+            const isInstSelected = selectedDeviceIds.includes(instructorDevice.id);
+            const instNotesCount = (instructorDevice.deviceNotes || []).length;
+            const instHasNotes = instNotesCount > 0 || Boolean(instructorDevice.notes);
+
+            return (
+              <button
+                type="button"
+                dir="rtl"
+                onClick={() => handleOpenDevice(instructorDevice)}
+                title={`جهاز مكتب المدرب: ${instructorDevice.tag} (${instructorDevice.status})\nالرام: ${instructorDevice.ram || 'غير محدد'}\nالهاردسك: ${instructorDevice.storage || 'غير محدد'}\nالباور سبلاي: ${instructorDevice.powerSupply || 'سليم'}${instHasNotes ? `\nالملاحظات: (${instNotesCount})` : ''}\n\nاضغط لفتح تفاصيل جهاز المدرب وحالته والملاحظات`}
+                className={`group relative flex flex-wrap items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 text-xs font-black shadow-xs transition-all duration-150 cursor-pointer hover:shadow-md hover:scale-[1.02] select-none ${
+                  isInstSelected
+                    ? 'border-blue-600 ring-2 ring-blue-500/40 bg-blue-50 dark:bg-blue-950/80'
+                    : 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-300 dark:border-blue-700 hover:border-blue-500'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-right">
+                  {isBulkMode ? (
+                    isInstSelected ? (
+                      <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400 shrink-0" />
+                    )
+                  ) : (
+                    <div className="p-1.5 rounded-xl bg-blue-600/10 dark:bg-blue-400/15 text-blue-700 dark:text-blue-300 shrink-0">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center gap-1.5 text-blue-950 dark:text-blue-100">
+                      <span>مكتب المدرب</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-200/70 dark:bg-blue-900/70 text-blue-800 dark:text-blue-200">
+                        Instructor
+                      </span>
+                    </div>
+                    <span className="block text-[9px] text-blue-700/80 dark:text-blue-300/80 font-semibold mt-0.5">
+                      {isBulkMode ? 'اضغط لتحديد جهاز المدرب' : 'اضغط لفتح جهاز المدرب والملاحظات'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Attached Instructor PC Node */}
+                <div
+                  className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-xl border-2 transition-colors ${instStatusCfg.bg} ${instStatusCfg.border}`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${instStatusCfg.dot}`}
+                    title={instructorDevice.status}
+                  />
+                  <Monitor className="w-4 h-4 text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 shrink-0" />
+                  <div className="text-right leading-tight">
+                    <div className="text-[11px] font-black text-slate-900 dark:text-white">
+                      {instructorDevice.tag}
+                    </div>
+                    <div className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+                      {instructorDevice.ram || 'RAM'} • {instructorDevice.storage?.includes('SSD') ? 'SSD' : (instructorDevice.storage || 'Storage')}
+                    </div>
+                  </div>
+                  {instHasNotes && (
+                    <span
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[9px] font-black"
+                      title={`${instNotesCount} ملاحظة`}
+                    >
+                      <MessageSquare className="w-2.5 h-2.5" />
+                      {instNotesCount > 0 && <span>{instNotesCount}</span>}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -686,10 +850,16 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
                   <Monitor className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-black text-slate-900 dark:text-white">
                       بيانات وملاحظات: {activeDevice.tag}
                     </h3>
+                    {activeDevice.id === instructorDevice.id && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
+                        <UserCheck className="w-3 h-3" />
+                        <span>جهاز مكتب المدرب</span>
+                      </span>
+                    )}
                     <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                       DEVICE_STATUS_CONFIG[activeDevice.status]?.bg || ''
                     } ${DEVICE_STATUS_CONFIG[activeDevice.status]?.text || ''} ${
@@ -847,6 +1017,43 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
                     placeholder="مواصفات إضافية، موقع الجهاز في القاعة..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
                   />
+                </div>
+
+                {/* Log single device action to Outputs & Visits */}
+                <div className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/60 space-y-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-blue-900 dark:text-blue-200">
+                    <input
+                      type="checkbox"
+                      checked={editLogAsOperation}
+                      onChange={(e) => setEditLogAsOperation(e.target.checked)}
+                      className="w-4 h-4 rounded accent-blue-600"
+                    />
+                    <span>توثيق التعديل في سجل العمليات والمخرجات واحتساب زيارة للقاعة</span>
+                  </label>
+
+                  {editLogAsOperation && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <select
+                        value={editLogKind}
+                        onChange={(e) => setEditLogKind(e.target.value as 'maintained' | 'updated' | 'ram' | 'hdd' | 'psu')}
+                        className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs font-bold"
+                      >
+                        <option value="maintained">صيانة عامة (جهاز)</option>
+                        <option value="updated">تحديث نظام / تعريفات</option>
+                        <option value="ram">ترقية رام (RAM)</option>
+                        <option value="hdd">تبديل هاردسك (SSD/HDD)</option>
+                        <option value="psu">تبديل باور سبلاي (PSU)</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        value={editLogExecutor}
+                        onChange={(e) => setEditLogExecutor(e.target.value)}
+                        placeholder="اسم المنفذ (اختياري)..."
+                        className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">

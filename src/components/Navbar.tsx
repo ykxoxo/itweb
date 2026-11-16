@@ -15,6 +15,7 @@ import {
   Server,
   Sun,
   Moon,
+  FolderOpen,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -27,6 +28,8 @@ export const Navbar: React.FC = () => {
     resetToDefaultData,
     darkMode,
     toggleDarkMode,
+    desktopStorageInfo,
+    openLocalFolder,
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -127,6 +130,17 @@ export const Navbar: React.FC = () => {
                 </>
               )}
             </button>
+
+            {desktopStorageInfo && (
+              <button
+                onClick={() => openLocalFolder('root')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-xl transition-colors text-xs font-semibold border border-emerald-200/80 dark:border-emerald-800"
+                title={`فتح مجلد البيانات والتقارير المحلي:\n${desktopStorageInfo.rootDir}`}
+              >
+                <FolderOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>المجلد المحلي</span>
+              </button>
+            )}
 
             <button
               onClick={exportBackupJson}
@@ -242,6 +256,18 @@ export const Navbar: React.FC = () => {
               <span>إعادة ضبط</span>
             </button>
           </div>
+          {desktopStorageInfo && (
+            <button
+              onClick={() => {
+                openLocalFolder('root');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold border border-emerald-200 dark:border-emerald-800"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>فتح مجلد الحفظ والتقارير المحلي</span>
+            </button>
+          )}
         </div>
       )}
     </header>

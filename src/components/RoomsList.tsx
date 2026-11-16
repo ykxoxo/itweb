@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ScreenStatus, Building, RoomLayoutType } from '../types';
 import { RoomNotesModal } from './RoomNotesModal';
+import { aggregateReportData } from '../utils/reportAggregator';
 import {
   Building2,
   Plus,
@@ -24,6 +25,7 @@ import {
   Edit2,
   FolderOpen,
   ChevronLeft,
+  ClipboardList,
 } from 'lucide-react';
 
 export const SCREEN_STATUS_CONFIG: Record<
@@ -65,6 +67,7 @@ export const RoomsList: React.FC = () => {
     buildings,
     rooms,
     logs,
+    visits,
     selectedBuildingId,
     setSelectedBuildingId,
     addBuilding,
@@ -72,10 +75,27 @@ export const RoomsList: React.FC = () => {
     deleteBuilding,
     addRoom,
     deleteRoom,
+    addVisit,
     setSelectedRoomIdForModal,
     setActiveTab,
     setPreselectedRoomIdForLog,
   } = useApp();
+
+  // Unified Building & Room Visit/Output Summaries
+  const reportSummaries = useMemo(
+    () => aggregateReportData({ buildings, rooms, logs, visits }),
+    [buildings, rooms, logs, visits]
+  );
+
+  const buildingSummaryMap = useMemo(
+    () => new Map(reportSummaries.byBuilding.map((b) => [b.building.id, b])),
+    [reportSummaries]
+  );
+
+  const roomSummaryMap = useMemo(
+    () => new Map(reportSummaries.byRoom.map((r) => [r.room.id, r])),
+    [reportSummaries]
+  );
 
   // Search and filter states
   const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
@@ -334,9 +354,12 @@ export const RoomsList: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredRooms.map((room) => {
-                const roomLogs = logs.filter((l) => l.roomId === room.id);
-                const ramCount = roomLogs.filter((l) => l.category === 'ترقية رام').length;
-                const screenCount = roomLogs.filter((l) => l.category === 'شاشات' || l.replacementSubType === 'شاشات').length;
+                const roomSummary = roomSummaryMap.get(room.id);
+                const roomOpsCount = roomSummary?.outputs.totalOperations || 0;
+                const ramCount = roomSummary?.outputs.devicesUpgraded || 0;
+                const screenCount = roomSummary?.outputs.screensReplaced || 0;
+                const visitsCount = roomSummary?.visitsCount || 0;
+                const lastVisitDate = roomSummary?.lastVisitDate || null;
                 const notesCount = (room.roomNotes || []).length;
                 const statusConfig = SCREEN_STATUS_CONFIG[room.screenStatus] || SCREEN_STATUS_CONFIG['لا توجد شاشة'];
 
@@ -375,7 +398,9 @@ export const RoomsList: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
                           <Monitor className="w-3 h-3" />
-                          <span>{room.devices?.length || room.totalDevices || 20} جهاز</span>
+                          <span>
+                            {(room.devices?.length || room.totalDevices || 20) + (room.instructorDevice ? 1 : 0)} جهاز
+                          </span>
                         </span>
                         <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                           {room.layoutType === 'two-rows'
@@ -384,6 +409,11 @@ export const RoomsList: React.FC = () => {
                             ? 'أربعة صفوف'
                             : 'مخطط حرف U'}
                         </span>
+                        {lastVisitDate && (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                            آخر زيارة: {lastVisitDate}
+                          </span>
+                        )}
                       </div>
 
                       {/* Direct Notes Trigger Button on card */}
@@ -403,26 +433,34 @@ export const RoomsList: React.FC = () => {
                       </div>
 
                       {/* Live Room Stats Pills */}
-                      <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2.5 text-center">
-                          <div className="flex items-center justify-center text-blue-600 dark:text-blue-400 mb-1">
-                            <Wrench className="w-4 h-4" />
+                      <div className="grid grid-cols-4 gap-1.5 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl p-2 text-center">
+                          <div className="flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-0.5">
+                            <ClipboardList className="w-3.5 h-3.5" />
                           </div>
-                          <span className="block text-sm font-black text-slate-800 dark:text-white">{roomLogs.length}</span>
+                          <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">{visitsCount}</span>
+                          <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">زيارات</span>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2 text-center">
+                          <div className="flex items-center justify-center text-blue-600 dark:text-blue-400 mb-0.5">
+                            <Wrench className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="block text-sm font-black text-slate-800 dark:text-white">{roomOpsCount}</span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">عمليات</span>
                         </div>
 
-                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2.5 text-center">
-                          <div className="flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-1">
-                            <Cpu className="w-4 h-4" />
+                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2 text-center">
+                          <div className="flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-0.5">
+                            <Cpu className="w-3.5 h-3.5" />
                           </div>
                           <span className="block text-sm font-black text-slate-800 dark:text-white">{ramCount}</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">ترقيات رام</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">رامات</span>
                         </div>
 
-                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2.5 text-center">
-                          <div className="flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-1">
-                            <Monitor className="w-4 h-4" />
+                        <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-2 text-center">
+                          <div className="flex items-center justify-center text-purple-600 dark:text-purple-400 mb-0.5">
+                            <Monitor className="w-3.5 h-3.5" />
                           </div>
                           <span className="block text-sm font-black text-slate-800 dark:text-white">{screenCount}</span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">شاشات</span>
@@ -434,17 +472,31 @@ export const RoomsList: React.FC = () => {
                     <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:underline flex items-center gap-1">
                         <ExternalLink className="w-3.5 h-3.5" />
-                        <span>فتح ملف القاعة</span>
+                        <span>فتح القاعة</span>
                       </span>
 
-                      <button
-                        onClick={(e) => handleQuickAddOperation(e, room.id)}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all"
-                        title="إضافة عملية جديدة لهذه القاعة"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>إضافة عملية</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addVisit({ roomId: room.id, purpose: 'جولة تفقدية' });
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold transition-all"
+                          title="تسجيل زيارة تفقدية سريعة بتاريخ اليوم"
+                        >
+                          <ClipboardList className="w-3 h-3" />
+                          <span>زيارة اليوم</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => handleQuickAddOperation(e, room.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all"
+                          title="إضافة عملية جديدة لهذه القاعة"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>إضافة عملية</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -691,9 +743,11 @@ export const RoomsList: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredBuildings.map((bldg) => {
+              const bldgSummary = buildingSummaryMap.get(bldg.id);
               const bldgRooms = rooms.filter((r) => r.buildingId === bldg.id);
-              const bldgRoomIds = new Set(bldgRooms.map((r) => r.id));
-              const bldgLogs = logs.filter((l) => bldgRoomIds.has(l.roomId));
+              const bldgLogsCount = bldgSummary?.outputs.totalOperations || 0;
+              const bldgVisitDays = bldgSummary?.visitDaysCount || 0;
+              const bldgRoomVisits = bldgSummary?.roomVisitsTotal || 0;
 
               const screensWorking = bldgRooms.filter((r) => r.screenStatus === 'تعمل بامتياز').length;
               const screensNeedsMaintenance = bldgRooms.filter((r) => r.screenStatus === 'تحتاج صيانة' || r.screenStatus === 'مكسورة').length;
@@ -740,21 +794,30 @@ export const RoomsList: React.FC = () => {
                     </p>
 
                     {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                      <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-3 text-center">
+                    <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                      <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-2.5 text-center">
                         <span className="block text-lg font-black text-blue-600 dark:text-blue-400">
                           {bldgRooms.length}
                         </span>
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
                           قاعة ومعمل
                         </span>
                       </div>
 
-                      <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-3 text-center">
-                        <span className="block text-lg font-black text-indigo-600 dark:text-indigo-400">
-                          {bldgLogs.length}
+                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-2.5 text-center">
+                        <span className="block text-lg font-black text-emerald-600 dark:text-emerald-400">
+                          {bldgVisitDays}
                         </span>
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        <span className="text-[10px] font-bold text-emerald-700/80 dark:text-emerald-300">
+                          أيام زيارة ({bldgRoomVisits} قاعة)
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-2.5 text-center">
+                        <span className="block text-lg font-black text-indigo-600 dark:text-indigo-400">
+                          {bldgLogsCount}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
                           عملية مسجلة
                         </span>
                       </div>

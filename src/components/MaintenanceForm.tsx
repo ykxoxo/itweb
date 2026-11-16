@@ -6,6 +6,7 @@ import type {
   OperationCategory,
   GeneralMaintenanceSubType,
   ReplacementSubType,
+  VisitPurpose,
 } from '../types';
 import {
   Wrench,
@@ -32,15 +33,20 @@ export const MaintenanceForm: React.FC = () => {
     buildings,
     rooms,
     addLog,
+    addVisit,
     preselectedRoomIdForLog,
     setPreselectedRoomIdForLog,
     setActiveTab,
     setSelectedRoomIdForModal,
   } = useApp();
 
+  // Form mode: operation log or quick field inspection visit
+  const [entryMode, setEntryMode] = useState<'operation' | 'visit'>('operation');
+
   // Basic selections
   const [roomId, setRoomId] = useState<string>('');
   const [category, setCategory] = useState<OperationCategory>('صيانة عامة');
+  const [visitPurpose, setVisitPurpose] = useState<VisitPurpose>('جولة تفقدية');
 
   // Sub-types
   const [generalSubType, setGeneralSubType] = useState<GeneralMaintenanceSubType>('أجهزة');
@@ -60,9 +66,11 @@ export const MaintenanceForm: React.FC = () => {
   const [newDeviceRam, setNewDeviceRam] = useState<string>('');
   const [newDeviceStorage, setNewDeviceStorage] = useState<string>('');
 
-  // RAM Upgrade Specs
+  // RAM Upgrade & Hardware Swap Specs
   const [prevRam, setPrevRam] = useState<string>('');
   const [upgradedRam, setUpgradedRam] = useState<string>('');
+  const [hardDriveSpec, setHardDriveSpec] = useState<string>('');
+  const [powerSupplySpec, setPowerSupplySpec] = useState<string>('');
 
   // Free text, Executor & Date (All Optional)
   const [actionDetails, setActionDetails] = useState<string>('');
@@ -72,6 +80,7 @@ export const MaintenanceForm: React.FC = () => {
   const [lastLoggedOperation, setLastLoggedOperation] = useState<{
     roomName: string;
     category: string;
+    isVisit?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -92,6 +101,25 @@ export const MaintenanceForm: React.FC = () => {
     }
 
     const currentRoom = rooms.find((r) => r.id === targetRoomId);
+    const effectiveDate = date || new Date().toISOString().split('T')[0];
+
+    if (entryMode === 'visit') {
+      addVisit({
+        roomId: targetRoomId,
+        date: effectiveDate,
+        visitorName: executorName.trim() || undefined,
+        purpose: visitPurpose,
+        notes: actionDetails.trim() || undefined,
+      });
+
+      setLastLoggedOperation({
+        roomName: currentRoom?.name || 'القاعة',
+        category: visitPurpose,
+        isVisit: true,
+      });
+      setActionDetails('');
+      return;
+    }
 
     // Build the log with all optional data
     const parsedDevicesCount = devicesCount ? parseInt(devicesCount, 10) : undefined;
@@ -123,9 +151,17 @@ export const MaintenanceForm: React.FC = () => {
           : undefined,
       previousRam: category === 'ترقية رام' ? prevRam.trim() || undefined : undefined,
       newRam: category === 'ترقية رام' ? upgradedRam.trim() || undefined : undefined,
+      hardDrive:
+        category === 'تبديل هاردسك' || (category === 'استبدال' && replacementSubType === 'هاردسكات')
+          ? hardDriveSpec.trim() || undefined
+          : undefined,
+      powerSupply:
+        category === 'تبديل باور سبلاي' || (category === 'استبدال' && replacementSubType === 'باور سبلاي')
+          ? powerSupplySpec.trim() || undefined
+          : undefined,
       actionDetails: actionDetails.trim() || undefined,
       executorName: executorName.trim() || undefined,
-      date: date || new Date().toISOString().split('T')[0],
+      date: effectiveDate,
     });
 
     setLastLoggedOperation({
@@ -146,24 +182,54 @@ export const MaintenanceForm: React.FC = () => {
     setNewDeviceStorage('');
     setPrevRam('');
     setUpgradedRam('');
+    setHardDriveSpec('');
+    setPowerSupplySpec('');
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
       
       {/* Header Banner */}
-      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-bold mb-2 border border-blue-100 dark:border-blue-900/60">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>تسجيل العمليات والإجراءات الفنية</span>
+            <span>تسجيل العمليات والإجراءات والزيارات الميدانية</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            نموذج إضافة عملية جديدة
+            {entryMode === 'visit' ? 'تسجيل زيارة تفقدية لقاعة' : 'نموذج إضافة عملية جديدة'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            تسجيل دقيق لكافة تفاصيل الصيانة والاستبدال وترقيات الرام. جميع الحقول والمعلومات اختيارية.
+            {entryMode === 'visit'
+              ? 'لتوثيق زيارات الفحص والجولات الروتينية التي لا تتضمن استبدال قطع حتى تُحتسب في تقرير الزيارات.'
+              : 'تسجيل دقيق لكافة تفاصيل الصيانة والاستبدال والترقيات. جميع الحقول والمعلومات اختيارية.'}
           </p>
+        </div>
+
+        {/* Mode Switcher */}
+        <div className="inline-flex p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 self-start sm:self-center">
+          <button
+            type="button"
+            onClick={() => setEntryMode('operation')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              entryMode === 'operation'
+                ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            عملية صيانة / ترقية
+          </button>
+          <button
+            type="button"
+            onClick={() => setEntryMode('visit')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              entryMode === 'visit'
+                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            زيارة تفقدية
+          </button>
         </div>
       </div>
 
@@ -174,7 +240,9 @@ export const MaintenanceForm: React.FC = () => {
             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div className="text-xs sm:text-sm">
               <span className="font-bold">
-                تم تسجيل عملية ({lastLoggedOperation.category}) في "{lastLoggedOperation.roomName}" بنجاح!
+                {lastLoggedOperation.isVisit
+                  ? `تم تسجيل زيارة (${lastLoggedOperation.category}) لـ "${lastLoggedOperation.roomName}" بنجاح!`
+                  : `تم تسجيل عملية (${lastLoggedOperation.category}) في "${lastLoggedOperation.roomName}" بنجاح!`}
               </span>
               <span className="block text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">
                 تم تحديث الإحصائيات الفنية للقاعة والنظام تلقائياً.
@@ -255,18 +323,51 @@ export const MaintenanceForm: React.FC = () => {
           </select>
         </div>
 
+        {/* Visit Mode Fields */}
+        {entryMode === 'visit' && (
+          <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 space-y-3 animate-in fade-in duration-200">
+            <span className="block text-xs font-bold text-emerald-800 dark:text-emerald-300">
+              الغرض من زيارة القاعة:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {(['جولة تفقدية', 'صيانة وتنفيذ', 'بلاغ طارئ', 'تجهيز ومتابعة'] as VisitPurpose[]).map(
+                (purposeOption) => {
+                  const selected = visitPurpose === purposeOption;
+                  return (
+                    <button
+                      key={purposeOption}
+                      type="button"
+                      onClick={() => setVisitPurpose(purposeOption)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        selected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {purposeOption}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 2. Main Operation Category Selection */}
+        {entryMode === 'operation' && (
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2.5">
             نوع العملية الأساسية:
           </label>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {[
               { id: 'صيانة عامة' as OperationCategory, label: 'صيانة عامة', icon: <Wrench className="w-5 h-5" /> },
-              { id: 'استبدال' as OperationCategory, label: 'استبدال', icon: <Sparkles className="w-5 h-5" /> },
               { id: 'ترقية رام' as OperationCategory, label: 'ترقية رام', icon: <Cpu className="w-5 h-5" /> },
+              { id: 'تبديل هاردسك' as OperationCategory, label: 'تبديل هاردسك', icon: <HardDrive className="w-5 h-5" /> },
+              { id: 'تبديل باور سبلاي' as OperationCategory, label: 'تبديل باور', icon: <Zap className="w-5 h-5" /> },
               { id: 'شاشات' as OperationCategory, label: 'شاشات', icon: <Monitor className="w-5 h-5" /> },
+              { id: 'استبدال' as OperationCategory, label: 'استبدال قطع', icon: <Sparkles className="w-5 h-5" /> },
             ].map((item) => {
               const isSelected = category === item.id;
               return (
@@ -274,7 +375,7 @@ export const MaintenanceForm: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => setCategory(item.id)}
-                  className={`flex flex-col items-center justify-center p-3.5 rounded-2xl border-2 text-xs font-bold transition-all text-center gap-2 ${
+                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition-all text-center gap-2 ${
                     isSelected
                       ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shadow-sm scale-[1.02]'
                       : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
@@ -289,11 +390,12 @@ export const MaintenanceForm: React.FC = () => {
             })}
           </div>
         </div>
+        )}
 
         {/* 3. Conditional Sub-Type & Specifics */}
 
         {/* CASE A: صيانة عامة */}
-        {category === 'صيانة عامة' && (
+        {entryMode === 'operation' && category === 'صيانة عامة' && (
           <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <div>
               <span className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
@@ -328,12 +430,16 @@ export const MaintenanceForm: React.FC = () => {
               </div>
             </div>
 
-            {/* If Maintenance SubType is 'أجهزة' or 'تحديث' */}
-            {(generalSubType === 'أجهزة' || generalSubType === 'تحديث') && (
+            {/* If Maintenance SubType is 'أجهزة', 'تحديث', 'تنشيط', or 'شاشات' */}
+            {(generalSubType === 'أجهزة' ||
+              generalSubType === 'تحديث' ||
+              generalSubType === 'تنشيط' ||
+              generalSubType === 'شاشات') && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    كم جهاز تم صيانته / تحديثه؟ <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
+                    {generalSubType === 'شاشات' ? 'كم عدد الشاشات؟' : 'كم عدد الأجهزة؟'}{' '}
+                    <span className="text-[11px] text-slate-400 font-normal">(اختياري)</span>
                   </label>
                   <input
                     type="number"
@@ -362,7 +468,7 @@ export const MaintenanceForm: React.FC = () => {
         )}
 
         {/* CASE B: استبدال */}
-        {category === 'استبدال' && (
+        {entryMode === 'operation' && category === 'استبدال' && (
           <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <div>
               <span className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
@@ -544,7 +650,7 @@ export const MaintenanceForm: React.FC = () => {
         )}
 
         {/* CASE C: ترقية رام */}
-        {category === 'ترقية رام' && (
+        {entryMode === 'operation' && category === 'ترقية رام' && (
           <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
               تفاصيل ترقية الرام:
@@ -604,7 +710,7 @@ export const MaintenanceForm: React.FC = () => {
         )}
 
         {/* CASE D: شاشات */}
-        {category === 'شاشات' && (
+        {entryMode === 'operation' && category === 'شاشات' && (
           <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
             <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
               تفاصيل عملية الشاشات:
@@ -632,6 +738,102 @@ export const MaintenanceForm: React.FC = () => {
                   value={deviceBrand}
                   onChange={(e) => setDeviceBrand(e.target.value)}
                   placeholder="مثال: Samsung 75 بوصة ذكية"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CASE E: تبديل هاردسك */}
+        {entryMode === 'operation' && category === 'تبديل هاردسك' && (
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
+            <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              تفاصيل تبديل الهاردسكات (SSD / HDD):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  عدد الهاردسكات / الأجهزة؟
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={devicesCount}
+                  onChange={(e) => setDevicesCount(e.target.value)}
+                  placeholder="مثال: 6"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  سعة ونوع الهاردسك الجديد:
+                </label>
+                <input
+                  type="text"
+                  value={hardDriveSpec}
+                  onChange={(e) => setHardDriveSpec(e.target.value)}
+                  placeholder="مثال: 512GB NVMe SSD"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  الماركة / الطراز (اختياري):
+                </label>
+                <input
+                  type="text"
+                  value={deviceBrand}
+                  onChange={(e) => setDeviceBrand(e.target.value)}
+                  placeholder="Kingston, Samsung, Dell..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CASE F: تبديل باور سبلاي */}
+        {entryMode === 'operation' && category === 'تبديل باور سبلاي' && (
+          <div className="bg-slate-50/80 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 space-y-4 animate-in fade-in duration-200">
+            <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              تفاصيل تبديل الباور سبلاي (Power Supply):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  عدد الوحدات / الأجهزة؟
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={devicesCount}
+                  onChange={(e) => setDevicesCount(e.target.value)}
+                  placeholder="مثال: 3"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  قدرة ونوع الباور الجديد:
+                </label>
+                <input
+                  type="text"
+                  value={powerSupplySpec}
+                  onChange={(e) => setPowerSupplySpec(e.target.value)}
+                  placeholder="مثال: 500W أصلي"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  الماركة / الموديل (اختياري):
+                </label>
+                <input
+                  type="text"
+                  value={deviceBrand}
+                  onChange={(e) => setDeviceBrand(e.target.value)}
+                  placeholder="Dell, HP..."
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 />
               </div>
@@ -708,9 +910,13 @@ export const MaintenanceForm: React.FC = () => {
 
           <button
             type="submit"
-            className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-extrabold text-sm sm:text-base shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
+            className={`flex items-center gap-2 px-8 py-3.5 rounded-2xl text-white font-extrabold text-sm sm:text-base shadow-lg active:scale-95 transition-all ${
+              entryMode === 'visit'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 shadow-emerald-500/25'
+                : 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 shadow-blue-500/25'
+            }`}
           >
-            <span>حفظ وإضافة العملية الآن</span>
+            <span>{entryMode === 'visit' ? 'تسجيل الزيارة التفقدية الآن' : 'حفظ وإضافة العملية الآن'}</span>
             <ArrowRight className="w-4 h-4 rotate-180" />
           </button>
         </div>

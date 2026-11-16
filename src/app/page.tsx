@@ -8,10 +8,10 @@ import { RoomsList } from '../components/RoomsList';
 import { RoomModal } from '../components/RoomModal';
 import { MaintenanceForm } from '../components/MaintenanceForm';
 import { ReportsView } from '../components/ReportsView';
-import { PrintReportModal } from '../components/PrintReportModal';
+import { PrintReportModal, type PrintReportFilters } from '../components/PrintReportModal';
 import { ToastContainer } from '../components/ToastContainer';
 import type { MaintenanceLog } from '../types';
-import { Server, Heart, Loader2 } from 'lucide-react';
+import { Server, Loader2 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { activeTab, rooms, logs, selectedRoomIdForModal } = useApp();
@@ -20,16 +20,23 @@ const MainLayout: React.FC = () => {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printLogs, setPrintLogs] = useState<MaintenanceLog[]>(logs);
   const [printPeriodLabel, setPrintPeriodLabel] = useState<string>('التقرير الشامل لكافة الفترات');
+  const [printFilters, setPrintFilters] = useState<PrintReportFilters | undefined>(undefined);
 
   const handleOpenPrintModalDefault = () => {
     setPrintLogs(logs);
-    setPrintPeriodLabel('التقرير الإحصائي الشامل للأعمال الفنية');
+    setPrintPeriodLabel('التقرير الإحصائي الشامل للمخرجات والزيارات والأعمال الفنية');
+    setPrintFilters(undefined);
     setIsPrintModalOpen(true);
   };
 
-  const handleOpenPrintModalWithLogs = (selectedLogs: MaintenanceLog[], periodLabel: string) => {
+  const handleOpenPrintModalWithLogs = (
+    selectedLogs: MaintenanceLog[],
+    periodLabel: string,
+    filters?: PrintReportFilters
+  ) => {
     setPrintLogs(selectedLogs);
     setPrintPeriodLabel(periodLabel);
+    setPrintFilters(filters);
     setIsPrintModalOpen(true);
   };
 
@@ -38,8 +45,8 @@ const MainLayout: React.FC = () => {
       {/* Top Navigation */}
       <Navbar />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Main Container (hidden during Print Modal printing so only the formal report prints) */}
+      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 ${isPrintModalOpen ? 'no-print' : ''}`}>
         {activeTab === 'dashboard' && (
           <Dashboard onOpenPrintModal={handleOpenPrintModalDefault} />
         )}
@@ -61,6 +68,7 @@ const MainLayout: React.FC = () => {
           logs={printLogs}
           rooms={rooms}
           periodLabel={printPeriodLabel}
+          filters={printFilters}
         />
       )}
 
@@ -69,16 +77,12 @@ const MainLayout: React.FC = () => {
 
       {/* Modern Footer */}
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400 no-print mt-auto transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-3">
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span className="font-bold text-slate-700 dark:text-slate-200">نظام إدارة أصول التقنية وصيانة القاعات (IT Hub)</span>
             <span>•</span>
             <span>نظام فني وإحصائي متكامل</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-            <span>تم التطوير لدعم فِرق تقنية المعلومات</span>
-            <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
           </div>
         </div>
       </footer>

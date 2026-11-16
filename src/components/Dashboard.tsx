@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { getLogSubAndSpecs } from '../utils/reportAggregator';
 import {
   Cpu,
   Wrench,
@@ -15,6 +16,10 @@ import {
   Sparkles,
   ClipboardCheck,
   RefreshCw,
+  HardDrive,
+  Zap,
+  Monitor,
+  ClipboardList,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -30,10 +35,12 @@ import {
 } from 'recharts';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'صيانة عامة': '#3b82f6', // Blue
-  'استبدال': '#8b5cf6',    // Purple
-  'ترقية رام': '#6366f1',  // Indigo
-  'شاشات': '#10b981',      // Emerald
+  'صيانة عامة': '#3b82f6',      // Blue
+  'ترقية رام': '#6366f1',       // Indigo
+  'تبديل هاردسك': '#06b6d4',    // Cyan
+  'تبديل باور سبلاي': '#f59e0b', // Amber
+  'شاشات': '#10b981',           // Emerald
+  'استبدال': '#8b5cf6',         // Purple
 };
 
 export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPrintModal }) => {
@@ -71,8 +78,16 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
       .slice(0, 6);
   }, [logs, rooms]);
 
-  // Recent 6 logs
-  const recentLogs = useMemo(() => [...logs].reverse().slice(0, 6), [logs]);
+  // Recent 6 logs sorted newest first by date & createdAt
+  const recentLogs = useMemo(() => {
+    return [...logs]
+      .sort((a, b) => {
+        const dateCmp = (b.date || '').localeCompare(a.date || '');
+        if (dateCmp !== 0) return dateCmp;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      })
+      .slice(0, 6);
+  }, [logs]);
   const roomObjMap = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms]);
   const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b.name])), [buildings]);
 
@@ -125,28 +140,30 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
       {/* Main KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        {/* KPI 1: Devices Maintained */}
+        {/* KPI 1: Devices Maintained & Updated */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تم صيانتها بشكل عام</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">الصيانة والتحديث العام</span>
             <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Wrench className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-blue-700 dark:text-blue-400">{stats.devicesMaintained}</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">جهاز تمت صيانته</span>
+            <span className="text-3xl font-extrabold text-blue-700 dark:text-blue-400">
+              {stats.devicesMaintained + stats.devicesUpdated}
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">جهاز منجز</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>صيانة دورية للأجهزة</span>
-            <span className="font-bold text-blue-700 dark:text-blue-400">منجز</span>
+            <span>صيانة: <strong className="text-blue-700 dark:text-blue-400">{stats.devicesMaintained}</strong></span>
+            <span>تحديث: <strong className="text-teal-700 dark:text-teal-400">{stats.devicesUpdated}</strong></span>
           </div>
         </div>
 
-        {/* KPI 2: Devices Upgraded (RAM) */}
+        {/* KPI 2: Hardware Upgrades (RAM, SSD, PSU) */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تمت ترقيتها (رام)</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">الترقيات والقطع الداخلية</span>
             <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <Cpu className="w-5 h-5" />
             </div>
@@ -154,57 +171,63 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
           <div className="mt-4 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-400">{stats.devicesUpgraded}</span>
             <span className="text-xs text-indigo-600 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
-              جهاز مرقى
+              ترقية رام
             </span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>ترقية رامات الذاكرة</span>
-            <span className="font-bold text-indigo-700 dark:text-indigo-400">نشط</span>
-          </div>
-        </div>
-
-        {/* KPI 3: Devices Updated */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">أجهزة تم تحديثها</span>
-            <div className="w-11 h-11 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-              <RefreshCw className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-teal-700 dark:text-teal-400">{stats.devicesUpdated}</span>
-            <span className="text-xs text-teal-600 dark:text-teal-300 font-semibold bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-md">
-              جهاز محدث
+            <span className="flex items-center gap-1">
+              <HardDrive className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+              هاردسك: <strong className="text-slate-800 dark:text-slate-200">{stats.hardDrivesReplaced}</strong>
+            </span>
+            <span className="flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              باور: <strong className="text-slate-800 dark:text-slate-200">{stats.powerSuppliesReplaced}</strong>
             </span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>تحديث أنظمة وتعريفات</span>
-            <span className="font-bold text-teal-700 dark:text-teal-400">جاهز</span>
-          </div>
         </div>
 
-        {/* KPI 4: Replaced Devices & Items */}
+        {/* KPI 3: Screens & Peripheral Replacements */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">عمليات الاستبدال</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">الشاشات والاستبدال</span>
             <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Sparkles className="w-5 h-5" />
+              <Monitor className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-purple-700 dark:text-purple-400">{stats.devicesReplaced}</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">جهاز + {stats.itemsReplaced} ملحقات</span>
+            <span className="text-3xl font-extrabold text-purple-700 dark:text-purple-400">{stats.screensReplaced}</span>
+            <span className="text-xs text-purple-600 dark:text-purple-300 font-semibold bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md">
+              شاشة مبدلة / مركبة
+            </span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>شاشات / ماوسات / كيبوردات</span>
-            <span className="font-bold text-purple-700 dark:text-purple-400">{stats.screensCount} شاشة</span>
+            <span>أجهزة: <strong className="text-slate-800 dark:text-slate-200">{stats.devicesReplaced}</strong></span>
+            <span>ملحقات: <strong className="text-slate-800 dark:text-slate-200">{stats.itemsReplaced}</strong></span>
+          </div>
+        </div>
+
+        {/* KPI 4: Visits & Asset Readiness */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">زيارات القاعات والمباني</span>
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-emerald-700 dark:text-emerald-400">{stats.totalRoomVisits}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">زيارة قاعة</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>أيام المباني: <strong className="text-emerald-700 dark:text-emerald-400">{stats.totalBuildingVisitDays}</strong></span>
+            <span>جاهزية: <strong className="text-blue-700 dark:text-blue-400">{stats.readinessPercent}%</strong></span>
           </div>
         </div>
 
       </div>
 
       {/* Secondary Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl">
@@ -219,7 +242,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
             onClick={() => setActiveTab('reports')}
             className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
           >
-            عرض السجل الشامل
+            السجل
           </button>
         </div>
 
@@ -239,8 +262,25 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
             onClick={() => setActiveTab('rooms')}
             className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
           >
-            إدارة المباني والقاعات
+            إدارة
           </button>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 rounded-xl">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block">وضع الأجهزة الفعلي بالقاعات</span>
+              <span className="text-base font-black text-slate-800 dark:text-white">
+                {stats.devicesReadyCount} جاهز / {stats.totalInstalledDevices} جهاز
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
+            {stats.devicesNeedMaintenanceCount > 0 ? `${stats.devicesNeedMaintenanceCount} صيانة` : 'ممتاز'}
+          </span>
         </div>
       </div>
 
@@ -337,7 +377,9 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                   <YAxis tick={{ fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11 }} allowDecimals={false} />
                   <Tooltip
                     formatter={(value: any) => [`${value} عملية`, 'الإجمالي']}
-                    labelFormatter={(label) => `القاعة: ${label}`}
+                    labelFormatter={(label, payload: any) =>
+                      `القاعة: ${payload?.[0]?.payload?.fullName || label}`
+                    }
                     contentStyle={{
                       backgroundColor: darkMode ? '#0f172a' : '#1e293b',
                       borderRadius: '12px',
@@ -401,22 +443,7 @@ export const Dashboard: React.FC<{ onOpenPrintModal: () => void }> = ({ onOpenPr
                 const roomName = room?.name || 'غير محدد';
                 const buildingName = room?.buildingId ? buildingMap.get(room.buildingId) : null;
                 const badgeColor = CATEGORY_COLORS[log.category] || '#3b82f6';
-
-                let subAndCount = '-';
-                if (log.category === 'صيانة عامة' && log.generalSubType) {
-                  subAndCount = `${log.generalSubType} ${log.devicesCount ? `(${log.devicesCount} جهاز)` : ''}`;
-                } else if (log.category === 'استبدال' && log.replacementSubType) {
-                  subAndCount = `استبدال ${log.replacementSubType} ${log.devicesCount ? `(${log.devicesCount} جهاز)` : log.itemsCount ? `(${log.itemsCount} قطعة)` : ''}`;
-                } else if (log.category === 'ترقية رام') {
-                  subAndCount = log.devicesCount ? `ترقية ${log.devicesCount} جهاز` : 'ترقية رام';
-                }
-
-                let specs = log.deviceBrand || '';
-                if (log.category === 'استبدال' && log.oldDevice && log.newDevice) {
-                  specs = `${log.oldDevice.nameOrBrand || ''} ⬅ ${log.newDevice.nameOrBrand || ''}`;
-                } else if (log.category === 'ترقية رام' && (log.previousRam || log.newRam)) {
-                  specs = `${log.deviceBrand ? `${log.deviceBrand} ` : ''}(${log.previousRam || ''} ⬅ ${log.newRam || ''})`;
-                }
+                const { subAndCount, specs } = getLogSubAndSpecs(log);
 
                 return (
                   <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">

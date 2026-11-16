@@ -25,6 +25,21 @@ export const createDefaultDevices = (
   });
 };
 
+export const createDefaultInstructorDevice = (
+  roomId: string,
+  status: DeviceStatus = 'لم يتم العمل عليه',
+  brand = 'Dell OptiPlex'
+): RoomDevice => ({
+  id: `dev-${roomId}-instructor`,
+  tag: 'PC-Instructor',
+  status,
+  brand,
+  ram: '16GB',
+  storage: '512GB SSD',
+  powerSupply: 'سليم (500W)',
+  deviceNotes: [],
+});
+
 export const INITIAL_BUILDINGS: Building[] = [
   {
     id: 'bldg-1',
@@ -55,6 +70,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'u-shape',
     totalDevices: 12,
     devices: createDefaultDevices('room-1', 12, 'تم تحديثه'),
+    instructorDevice: createDefaultInstructorDevice('room-1', 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-1',
@@ -73,6 +89,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'u-shape',
     totalDevices: 10,
     devices: createDefaultDevices('room-6', 10, 'تم تحديثه'),
+    instructorDevice: createDefaultInstructorDevice('room-6', 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-6',
@@ -91,6 +108,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'four-rows',
     totalDevices: 24,
     devices: createDefaultDevices('room-2', 24, 'تم تحديثه'),
+    instructorDevice: createDefaultInstructorDevice('room-2', 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-2',
@@ -109,6 +127,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'two-rows',
     totalDevices: 16,
     devices: createDefaultDevices('room-3', 16, 'لم يتم العمل عليه'),
+    instructorDevice: createDefaultInstructorDevice('room-3', 'لم يتم العمل عليه'),
     roomNotes: [
       {
         id: 'note-3',
@@ -127,6 +146,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'two-rows',
     totalDevices: 14,
     devices: createDefaultDevices('room-5', 14, 'لم يتم العمل عليه'),
+    instructorDevice: createDefaultInstructorDevice('room-5', 'لم يتم العمل عليه'),
     roomNotes: [
       {
         id: 'note-5',
@@ -145,6 +165,7 @@ export const INITIAL_ROOMS: Room[] = [
     layoutType: 'u-shape',
     totalDevices: 8,
     devices: createDefaultDevices('room-4', 8, 'تم تحديثه'),
+    instructorDevice: createDefaultInstructorDevice('room-4', 'تم تحديثه'),
     roomNotes: [
       {
         id: 'note-4',

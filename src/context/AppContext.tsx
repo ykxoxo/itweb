@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type {
   Building,
   Room,
@@ -15,9 +15,19 @@ import type {
   DeviceNote,
   GeneralMaintenanceSubType,
   ReplacementSubType,
+  RoomVisit,
+  VisitPurpose,
 } from '../types';
-import { INITIAL_BUILDINGS, INITIAL_ROOMS, INITIAL_LOGS, createDefaultDevices } from '../data/initialData';
-import * as XLSX from 'xlsx';
+import type { DesktopStorageInfo, DesktopFolderTarget } from '../types/electron';
+import {
+  INITIAL_BUILDINGS,
+  INITIAL_ROOMS,
+  INITIAL_LOGS,
+  createDefaultDevices,
+  createDefaultInstructorDevice,
+} from '../data/initialData';
+import { computeSystemStats } from '../utils/reportAggregator';
+import { exportComprehensiveReportToExcel } from '../utils/excelExporter';
 
 export type TabType = 'dashboard' | 'rooms' | 'add-log' | 'reports';
 
@@ -31,6 +41,7 @@ interface AppContextType {
   buildings: Building[];
   rooms: Room[];
   logs: MaintenanceLog[];
+  visits: RoomVisit[];
   stats: SystemStats;
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
@@ -57,7 +68,7 @@ interface AppContextType {
   updateRoom: (id: string, updates: Partial<Room>) => void;
   deleteRoom: (id: string) => void;
   // Room Map & Devices actions
-  updateRoomDevice: (roomId: string, deviceId: string, updates: Partial<RoomDevice>) => void;
+  updateRoomDevice: (roomId: string, deviceId: string, updates: Partial<RoomDevice>, options?: { silent?: boolean }) => void;
   addDeviceNote: (roomId: string, deviceId: string, text: string) => void;
   deleteDeviceNote: (roomId: string, deviceId: string, noteId: string) => void;
   bulkUpdateDevices: (
@@ -90,20 +101,54 @@ interface AppContextType {
   deleteRoomNote: (roomId: string, noteId: string) => void;
   updateRoomNote: (roomId: string, noteId: string, text: string) => void;
   // Log actions
-  addLog: (logData: Omit<MaintenanceLog, 'id' | 'createdAt'>) => MaintenanceLog;
+  addLog: (logData: Omit<MaintenanceLog, 'id' | 'createdAt'>, options?: { silent?: boolean }) => MaintenanceLog;
   updateLog: (id: string, updates: Partial<MaintenanceLog>) => void;
   deleteLog: (id: string) => void;
+  // Visit actions
+  addVisit: (visitData: {
+    roomId: string;
+    date?: string;
+    visitorName?: string;
+    purpose?: VisitPurpose;
+    notes?: string;
+  }) => RoomVisit;
+  deleteVisit: (id: string, options?: { silent?: boolean }) => void;
   // Utilities
   getRoomById: (id: string) => Room | undefined;
   getRoomLogs: (roomId: string) => MaintenanceLog[];
-  exportLogsToExcel: (customLogs?: MaintenanceLog[], fileNamePrefix?: string) => void;
-  exportBackupJson: () => void;
+  exportLogsToExcel: (
+    customLogs?: MaintenanceLog[],
+    fileNamePrefix?: string,
+    options?: {
+      periodLabel?: string;
+      filters?: {
+        buildingId?: string;
+        roomId?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        includeExplicitVisits?: boolean;
+      };
+    }
+  ) => Promise<void>;
+  exportBackupJson: () => Promise<void>;
   importBackupJson: (file: File) => Promise<boolean>;
   resetToDefaultData: () => void;
   darkMode: boolean;
   toggleDarkMode: () => void;
   toasts: ToastState[];
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+  desktopStorageInfo: DesktopStorageInfo | null;
+  lastSavedReport: {
+    type: 'excel' | 'pdf' | 'backup';
+    filePath: string;
+    fileName: string;
+    savedAt: string;
+  } | null;
+  savePdfReportLocal: (
+    fileNamePrefix?: string
+  ) => Promise<{ ok: boolean; filePath?: string; fileName?: string; error?: string } | null>;
+  openLocalFolder: (target?: DesktopFolderTarget) => Promise<void>;
+  openLocalFile: (filePath: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -112,7 +157,96 @@ const STORAGE_KEYS = {
   BUILDINGS: 'it_hub_buildings_v1',
   ROOMS: 'it_hub_rooms_v5',
   LOGS: 'it_hub_logs_v3',
+  VISITS: 'it_hub_visits_v1',
 };
+
+let entitySeq = 0;
+function nextEntityId(prefix: string): string {
+  entitySeq += 1;
+  return `${prefix}-${Date.now()}-${entitySeq}`;
+}
+
+function normalizeLoadedRooms(rawRooms: any[]): Room[] {
+  return rawRooms.map((r: any) => {
+    const roomId = r.id || nextEntityId('room');
+    const notesArr: RoomNote[] = Array.isArray(r.roomNotes) ? r.roomNotes : [];
+    if (notesArr.length === 0 && r.notes && typeof r.notes === 'string') {
+      notesArr.push({
+        id: nextEntityId('note'),
+        text: r.notes,
+        date: new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }),
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    const layoutType: RoomLayoutType = r.layoutType || 'two-rows';
+    const totalDevices: number =
+      Number(r.totalDevices) || (Array.isArray(r.devices) && r.devices.length > 0 ? r.devices.length : 20);
+
+    let devices: RoomDevice[] = Array.isArray(r.devices) && r.devices.length > 0 ? r.devices : [];
+    if (devices.length === 0) {
+      devices = createDefaultDevices(roomId, totalDevices);
+    } else if (devices.length < totalDevices) {
+      const diff = totalDevices - devices.length;
+      const newDevices = Array.from({ length: diff }, (_, idx) => {
+        const num = String(devices.length + idx + 1).padStart(2, '0');
+        return {
+          id: nextEntityId(`dev-${roomId}-${devices.length + idx + 1}`),
+          tag: `PC-${num}`,
+          status: 'لم يتم العمل عليه' as DeviceStatus,
+          ram: '16GB',
+          storage: '512GB SSD',
+        };
+      });
+      devices = [...devices, ...newDevices];
+    }
+
+    const instructorDevice: RoomDevice | undefined =
+      r.instructorDevice && typeof r.instructorDevice === 'object'
+        ? {
+            ...r.instructorDevice,
+            id: r.instructorDevice.id || `dev-${roomId}-instructor`,
+            tag: r.instructorDevice.tag || 'PC-Instructor',
+            status: r.instructorDevice.status || 'لم يتم العمل عليه',
+            deviceNotes: Array.isArray(r.instructorDevice.deviceNotes)
+              ? r.instructorDevice.deviceNotes
+              : [],
+          }
+        : devices.length > 0 || totalDevices > 0
+          ? createDefaultInstructorDevice(roomId)
+          : undefined;
+
+    return {
+      ...r,
+      id: roomId,
+      buildingId: r.buildingId || INITIAL_BUILDINGS[0]?.id || 'bldg-1',
+      roomNotes: notesArr,
+      layoutType,
+      totalDevices,
+      devices,
+      instructorDevice,
+    };
+  });
+}
+
+function updateDeviceInRoom(
+  room: Room,
+  deviceId: string,
+  updater: (device: RoomDevice) => RoomDevice
+): Room {
+  const instructorId = room.instructorDevice?.id || `dev-${room.id}-instructor`;
+  if (deviceId === instructorId) {
+    const currentInstructor = room.instructorDevice || createDefaultInstructorDevice(room.id);
+    return {
+      ...room,
+      instructorDevice: updater(currentInstructor),
+    };
+  }
+  return {
+    ...room,
+    devices: (room.devices || []).map((d) => (d.id === deviceId ? updater(d) : d)),
+  };
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [buildings, setBuildings] = useState<Building[]>(() => {
@@ -142,47 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((r: any) => {
-            const notesArr: RoomNote[] = Array.isArray(r.roomNotes) ? r.roomNotes : [];
-            if (notesArr.length === 0 && r.notes && typeof r.notes === 'string') {
-              notesArr.push({
-                id: `note-${Date.now()}-${Math.random()}`,
-                text: r.notes,
-                date: new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }),
-                createdAt: new Date().toISOString(),
-              });
-            }
-
-            const layoutType: RoomLayoutType = r.layoutType || 'two-rows';
-            const totalDevices: number = Number(r.totalDevices) || (Array.isArray(r.devices) && r.devices.length > 0 ? r.devices.length : 20);
-
-            let devices: RoomDevice[] = Array.isArray(r.devices) && r.devices.length > 0 ? r.devices : [];
-            if (devices.length === 0) {
-              devices = createDefaultDevices(r.id || `room-${Date.now()}`, totalDevices);
-            } else if (devices.length < totalDevices) {
-              const diff = totalDevices - devices.length;
-              const newDevices = Array.from({ length: diff }, (_, idx) => {
-                const num = String(devices.length + idx + 1).padStart(2, '0');
-                return {
-                  id: `dev-${r.id}-${devices.length + idx + 1}-${Date.now()}`,
-                  tag: `PC-${num}`,
-                  status: 'لم يتم العمل عليه' as DeviceStatus,
-                  ram: '16GB',
-                  storage: '512GB SSD',
-                };
-              });
-              devices = [...devices, ...newDevices];
-            }
-
-            return {
-              ...r,
-              buildingId: r.buildingId || INITIAL_BUILDINGS[0]?.id || 'bldg-1',
-              roomNotes: notesArr,
-              layoutType,
-              totalDevices,
-              devices,
-            };
-          });
+          return normalizeLoadedRooms(parsed);
         }
       } catch (e) {
         console.error('Failed to parse rooms from localStorage', e);
@@ -222,11 +316,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_LOGS;
   });
 
+  const [visits, setVisits] = useState<RoomVisit[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const saved = localStorage.getItem(STORAGE_KEYS.VISITS);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse visits from localStorage', e);
+      }
+    }
+    return [];
+  });
+
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
   const [selectedRoomIdForModal, setSelectedRoomIdForModal] = useState<string | null>(null);
   const [preselectedRoomIdForLog, setPreselectedRoomIdForLog] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
+  const [desktopStorageInfo, setDesktopStorageInfo] = useState<DesktopStorageInfo | null>(null);
+  const [desktopHydrated, setDesktopHydrated] = useState<boolean>(false);
+  const [lastSavedReport, setLastSavedReport] = useState<{
+    type: 'excel' | 'pdf' | 'backup';
+    filePath: string;
+    fileName: string;
+    savedAt: string;
+  } | null>(null);
 
   // Dark Mode State
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -237,6 +355,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return false;
   });
+
+  const latestStateRef = useRef({ buildings, rooms, logs, visits, darkMode });
+  latestStateRef.current = { buildings, rooms, logs, visits, darkMode };
+
+  // Hydrate state from local disk JSON database when running as Desktop program
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.electronAPI?.isDesktop) {
+      setDesktopHydrated(true);
+      return;
+    }
+
+    const api = window.electronAPI;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const info = await api.getStorageInfo();
+        if (!cancelled) {
+          setDesktopStorageInfo(info);
+        }
+
+        const res = await api.loadLocalDatabase();
+        if (!cancelled && res?.exists && res.data) {
+          const db = res.data;
+          if (Array.isArray(db.buildings) && db.buildings.length > 0) {
+            setBuildings(db.buildings);
+          }
+          if (Array.isArray(db.rooms)) {
+            setRooms(normalizeLoadedRooms(db.rooms));
+          }
+          if (Array.isArray(db.logs)) {
+            setLogs(db.logs);
+          }
+          if (Array.isArray(db.visits)) {
+            setVisits(db.visits);
+          }
+          if (typeof db.darkMode === 'boolean') {
+            setDarkMode(db.darkMode);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to hydrate desktop local database', err);
+      } finally {
+        if (!cancelled) {
+          setDesktopHydrated(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Coordinated local disk persistence (with rolling atomic backup inside Electron)
+  useEffect(() => {
+    if (!desktopHydrated || typeof window === 'undefined' || !window.electronAPI?.saveLocalDatabase) {
+      return;
+    }
+
+    const api = window.electronAPI;
+    const timer = setTimeout(() => {
+      api
+        .saveLocalDatabase({
+          version: '3.2.0',
+          updatedAt: new Date().toISOString(),
+          buildings,
+          rooms,
+          logs,
+          visits,
+          darkMode,
+        })
+        .catch((err) => console.error('Failed to save desktop local database', err));
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [desktopHydrated, buildings, rooms, logs, visits, darkMode]);
+
+  // Flush latest state immediately on window close / page hide in desktop mode
+  useEffect(() => {
+    if (!desktopHydrated || typeof window === 'undefined' || !window.electronAPI?.saveLocalDatabase) {
+      return;
+    }
+
+    const api = window.electronAPI;
+    const flushNow = () => {
+      const snapshot = latestStateRef.current;
+      api
+        .saveLocalDatabase({
+          version: '3.2.0',
+          updatedAt: new Date().toISOString(),
+          ...snapshot,
+        })
+        .catch(() => {});
+    };
+
+    window.addEventListener('pagehide', flushNow);
+    window.addEventListener('beforeunload', flushNow);
+    return () => {
+      window.removeEventListener('pagehide', flushNow);
+      window.removeEventListener('beforeunload', flushNow);
+    };
+  }, [desktopHydrated]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -281,61 +502,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [logs]);
 
-  // Dynamic Statistics Calculations (Memoized)
-  const stats: SystemStats = useMemo(() => {
-    let devicesMaintained = 0;
-    let devicesUpgraded = 0;
-    let devicesUpdated = 0;
-    let devicesReplaced = 0;
-    let itemsReplaced = 0;
-    let screensCount = 0;
-
-    for (let i = 0; i < logs.length; i++) {
-      const log = logs[i];
-      const count = Number(log.devicesCount) || 1;
-      const items = Number(log.itemsCount) || count;
-
-      if (log.category === 'ترقية رام') {
-        devicesUpgraded += count;
-      } else if (log.category === 'استبدال') {
-        if (log.replacementSubType === 'أجهزة') {
-          devicesReplaced += count;
-        } else if (log.replacementSubType === 'شاشات') {
-          screensCount += items;
-          itemsReplaced += items;
-        } else {
-          itemsReplaced += items;
-        }
-      } else if (log.category === 'صيانة عامة') {
-        if (log.generalSubType === 'أجهزة') {
-          devicesMaintained += count;
-        } else if (log.generalSubType === 'تحديث') {
-          devicesUpdated += count;
-        } else if (log.generalSubType === 'شاشات') {
-          screensCount += count;
-        } else {
-          devicesMaintained += count;
-        }
-      } else if (log.category === 'شاشات') {
-        screensCount += count;
-      }
+  // Persist visits
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.VISITS, JSON.stringify(visits));
+    } catch (e) {
+      console.error('Failed to save visits', e);
     }
+  }, [visits]);
 
-    return {
-      totalOperations: logs.length,
-      devicesMaintained,
-      devicesUpgraded,
-      devicesUpdated,
-      devicesReplaced,
-      itemsReplaced,
-      screensCount,
-      totalRooms: rooms.length,
-      totalBuildings: buildings.length,
-    };
-  }, [logs, rooms, buildings]);
+  // Dynamic Statistics Calculations (Unified via reportAggregator)
+  const stats: SystemStats = useMemo(
+    () => computeSystemStats(buildings, rooms, logs, visits),
+    [buildings, rooms, logs, visits]
+  );
+
+  const lastToastIdRef = useRef<number>(0);
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
-    const id = Date.now();
+    const id = Math.max(Date.now() * 1000, lastToastIdRef.current + 1);
+    lastToastIdRef.current = id;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -345,7 +531,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Building Actions
   const addBuilding = useCallback((name: string, description?: string): Building => {
     const newBuilding: Building = {
-      id: `bldg-${Date.now()}`,
+      id: nextEntityId('bldg'),
       name: name.trim(),
       description: description?.trim() || undefined,
       createdAt: new Date().toISOString().split('T')[0],
@@ -370,6 +556,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBuildings((prev) => prev.filter((b) => b.id !== id));
     setRooms((prev) => prev.filter((r) => !roomIdsToDelete.has(r.id)));
     setLogs((prev) => prev.filter((l) => !roomIdsToDelete.has(l.roomId)));
+    setVisits((prev) => prev.filter((v) => !roomIdsToDelete.has(v.roomId)));
 
     if (selectedBuildingId === id) {
       setSelectedBuildingId(null);
@@ -395,16 +582,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (initialNote?.trim()) {
       const now = new Date();
       roomNotes.push({
-        id: `note-${Date.now()}`,
+        id: nextEntityId('note'),
         text: initialNote.trim(),
         date: now.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
         createdAt: now.toISOString(),
       });
     }
 
-    const roomId = `room-${Date.now()}`;
+    const roomId = nextEntityId('room');
     const safeCount = Math.max(1, Number(totalDevices) || 20);
     const generatedDevices = createDefaultDevices(roomId, safeCount);
+    const instructorDevice = createDefaultInstructorDevice(roomId);
 
     const newRoom: Room = {
       id: roomId,
@@ -415,6 +603,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       layoutType: layoutType || 'two-rows',
       totalDevices: safeCount,
       devices: generatedDevices,
+      instructorDevice,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setRooms((prev) => [newRoom, ...prev]);
@@ -430,18 +619,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showToast]);
 
   // Room Device Actions
-  const updateRoomDevice = useCallback((roomId: string, deviceId: string, updates: Partial<RoomDevice>) => {
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id !== roomId) return r;
-        const updatedDevices = (r.devices || []).map((d) =>
-          d.id === deviceId ? { ...d, ...updates } : d
-        );
-        return { ...r, devices: updatedDevices };
-      })
-    );
-    showToast('تم تحديث بيانات الجهاز بنجاح', 'success');
-  }, [showToast]);
+  const updateRoomDevice = useCallback(
+    (roomId: string, deviceId: string, updates: Partial<RoomDevice>, options?: { silent?: boolean }) => {
+      setRooms((prev) =>
+        prev.map((r) =>
+          r.id === roomId
+            ? updateDeviceInRoom(r, deviceId, (d) => ({ ...d, ...updates }))
+            : r
+        )
+      );
+      if (!options?.silent) {
+        showToast('تم تحديث بيانات الجهاز بنجاح', 'success');
+      }
+    },
+    [showToast]
+  );
 
   const addDeviceNote = useCallback((roomId: string, deviceId: string, text: string) => {
     if (!text.trim()) return;
@@ -455,55 +647,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const newNote: DeviceNote = {
-      id: `dnote-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: nextEntityId('dnote'),
       text: text.trim(),
       date: formattedDate,
       createdAt: now.toISOString(),
     };
 
     setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id !== roomId) return r;
-        const updatedDevices = (r.devices || []).map((d) => {
-          if (d.id !== deviceId) return d;
-          return {
-            ...d,
-            deviceNotes: [newNote, ...(d.deviceNotes || [])],
-          };
-        });
-        return { ...r, devices: updatedDevices };
-      })
+      prev.map((r) =>
+        r.id === roomId
+          ? updateDeviceInRoom(r, deviceId, (d) => ({
+              ...d,
+              deviceNotes: [newNote, ...(d.deviceNotes || [])],
+            }))
+          : r
+      )
     );
     showToast('تمت إضافة الملاحظة على الجهاز بنجاح', 'success');
   }, [showToast]);
 
   const deleteDeviceNote = useCallback((roomId: string, deviceId: string, noteId: string) => {
     setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id !== roomId) return r;
-        const updatedDevices = (r.devices || []).map((d) => {
-          if (d.id !== deviceId) return d;
-          return {
-            ...d,
-            deviceNotes: (d.deviceNotes || []).filter((n) => n.id !== noteId),
-          };
-        });
-        return { ...r, devices: updatedDevices };
-      })
+      prev.map((r) =>
+        r.id === roomId
+          ? updateDeviceInRoom(r, deviceId, (d) => ({
+              ...d,
+              deviceNotes: (d.deviceNotes || []).filter((n) => n.id !== noteId),
+            }))
+          : r
+      )
     );
     showToast('تم حذف ملاحظة الجهاز', 'info');
   }, [showToast]);
 
-  const addLog = useCallback((logData: Omit<MaintenanceLog, 'id' | 'createdAt'>): MaintenanceLog => {
-    const newLog: MaintenanceLog = {
-      ...logData,
-      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      createdAt: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
-    showToast(`تم حفظ وإضافة العملية بنجاح`, 'success');
-    return newLog;
-  }, [showToast]);
+  const addLog = useCallback(
+    (logData: Omit<MaintenanceLog, 'id' | 'createdAt'>, options?: { silent?: boolean }): MaintenanceLog => {
+      const newLog: MaintenanceLog = {
+        ...logData,
+        id: nextEntityId('log'),
+        createdAt: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      if (!options?.silent) {
+        showToast(`تم حفظ وإضافة العملية بنجاح`, 'success');
+      }
+      return newLog;
+    },
+    [showToast]
+  );
 
   const updateLog = useCallback((id: string, updates: Partial<MaintenanceLog>) => {
     setLogs((prev) =>
@@ -516,6 +707,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLogs((prev) => prev.filter((l) => l.id !== id));
     showToast('تم حذف العملية بنجاح', 'info');
   }, [showToast]);
+
+  const addVisit = useCallback(
+    (visitData: {
+      roomId: string;
+      date?: string;
+      visitorName?: string;
+      purpose?: VisitPurpose;
+      notes?: string;
+    }): RoomVisit => {
+      const targetRoom = rooms.find((r) => r.id === visitData.roomId);
+      const newVisit: RoomVisit = {
+        id: nextEntityId('visit'),
+        roomId: visitData.roomId,
+        date: visitData.date || new Date().toISOString().split('T')[0],
+        visitorName: visitData.visitorName?.trim() || undefined,
+        purpose: visitData.purpose || 'جولة تفقدية',
+        notes: visitData.notes?.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      };
+      setVisits((prev) => [newVisit, ...prev]);
+      showToast(
+        `تم تسجيل زيارة لـ "${targetRoom?.name || 'القاعة'}" بتاريخ ${newVisit.date}`,
+        'success'
+      );
+      return newVisit;
+    },
+    [rooms, showToast]
+  );
+
+  const deleteVisit = useCallback(
+    (id: string, options?: { silent?: boolean }) => {
+      setVisits((prev) => prev.filter((v) => v.id !== id));
+      if (!options?.silent) {
+        showToast('تم حذف سجل الزيارة التفقدية', 'info');
+      }
+    },
+    [showToast]
+  );
 
   const bulkUpdateDevices = useCallback((
     roomId: string,
@@ -540,7 +769,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetRoom) return;
 
     const deviceIdSet = new Set(deviceIds);
-    const affectedTags = (targetRoom.devices || [])
+    const instructorDeviceForRoom =
+      targetRoom.instructorDevice || createDefaultInstructorDevice(targetRoom.id);
+    const allTargetDevices = [...(targetRoom.devices || []), instructorDeviceForRoom];
+    const affectedTags = allTargetDevices
       .filter((d) => deviceIdSet.has(d.id))
       .map((d) => d.tag);
 
@@ -553,34 +785,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       minute: '2-digit',
     });
 
+    const applyBulkChanges = (d: RoomDevice): RoomDevice => {
+      if (!deviceIdSet.has(d.id)) return d;
+      const extraNote: DeviceNote | null = details?.noteToAppend?.trim()
+        ? {
+            id: nextEntityId('dnote'),
+            text: details.noteToAppend.trim(),
+            date: formattedDate,
+            createdAt: now.toISOString(),
+          }
+        : null;
+
+      return {
+        ...d,
+        status: newStatus,
+        ram: details?.newRam || d.ram,
+        storage: details?.hardDrive || d.storage,
+        powerSupply: details?.powerSupply || d.powerSupply,
+        brand: details?.deviceBrand || d.brand,
+        deviceNotes: extraNote ? [extraNote, ...(d.deviceNotes || [])] : (d.deviceNotes || []),
+        lastMaintenanceDate: now.toISOString().split('T')[0],
+      };
+    };
+
     setRooms((prev) =>
       prev.map((r) => {
         if (r.id !== roomId) return r;
-        const updatedDevices = (r.devices || []).map((d) => {
-          if (deviceIdSet.has(d.id)) {
-            const extraNote: DeviceNote | null = details?.noteToAppend?.trim()
-              ? {
-                  id: `dnote-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-                  text: details.noteToAppend.trim(),
-                  date: formattedDate,
-                  createdAt: now.toISOString(),
-                }
-              : null;
-
-            return {
-              ...d,
-              status: newStatus,
-              ram: details?.newRam || d.ram,
-              storage: details?.hardDrive || d.storage,
-              powerSupply: details?.powerSupply || d.powerSupply,
-              brand: details?.deviceBrand || d.brand,
-              deviceNotes: extraNote ? [extraNote, ...(d.deviceNotes || [])] : (d.deviceNotes || []),
-              lastMaintenanceDate: now.toISOString().split('T')[0],
-            };
-          }
-          return d;
-        });
-        return { ...r, devices: updatedDevices };
+        const currentInstructor = r.instructorDevice || createDefaultInstructorDevice(r.id);
+        return {
+          ...r,
+          devices: (r.devices || []).map(applyBulkChanges),
+          instructorDevice: applyBulkChanges(currentInstructor),
+        };
       })
     );
 
@@ -602,7 +838,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       executorName: details?.executorName || 'الفريق الفني',
       date: logDate,
     };
-    addLog(logEntry);
+    addLog(logEntry, { silent: true });
 
     showToast(`تم تنفيذ الإجراء المجمع بنجاح على ${deviceIds.length} جهاز`, 'success');
   }, [rooms, addLog, showToast]);
@@ -625,7 +861,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const newDevices = Array.from({ length: diff }, (_, idx) => {
             const num = String(currentDevices.length + idx + 1).padStart(2, '0');
             return {
-              id: `dev-${r.id}-${Date.now()}-${idx}`,
+              id: nextEntityId(`dev-${r.id}-${idx}`),
               tag: `PC-${num}`,
               status: 'لم يتم العمل عليه' as DeviceStatus,
               ram: '16GB',
@@ -656,6 +892,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const roomToDelete = rooms.find((r) => r.id === id);
     setRooms((prev) => prev.filter((r) => r.id !== id));
     setLogs((prev) => prev.filter((l) => l.roomId !== id));
+    setVisits((prev) => prev.filter((v) => v.roomId !== id));
     if (selectedRoomIdForModal === id) {
       setSelectedRoomIdForModal(null);
     }
@@ -667,7 +904,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!text.trim()) return;
     const now = new Date();
     const newNote: RoomNote = {
-      id: `note-${Date.now()}`,
+      id: nextEntityId('note'),
       text: text.trim(),
       date: now.toLocaleDateString('ar-SA', {
         year: 'numeric',
@@ -727,90 +964,156 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return logs.filter((l) => l.roomId === roomId);
   }, [logs]);
 
-  const exportLogsToExcel = useCallback((customLogs?: MaintenanceLog[], fileNamePrefix = 'تقرير_العمليات_الفنية') => {
-    const targetLogs = customLogs || logs;
-    const roomObjMap = new Map(rooms.map((r) => [r.id, r]));
-    const buildingMap = new Map(buildings.map((b) => [b.id, b.name]));
+  const exportLogsToExcel = useCallback(
+    async (
+      customLogs?: MaintenanceLog[],
+      fileNamePrefix = 'تقرير_المخرجات_الشامل',
+      options?: {
+        periodLabel?: string;
+        filters?: {
+          buildingId?: string;
+          roomId?: string;
+          dateFrom?: string;
+          dateTo?: string;
+          includeExplicitVisits?: boolean;
+        };
+      }
+    ) => {
+      const desktopSave = typeof window !== 'undefined' ? window.electronAPI?.saveExcelReport : undefined;
 
-    const formattedData = targetLogs.map((log, index) => {
-      const room = roomObjMap.get(log.roomId);
-      const buildingName = room?.buildingId ? (buildingMap.get(room.buildingId) || '-') : '-';
+      if (desktopSave) {
+        const result = exportComprehensiveReportToExcel({
+          buildings,
+          rooms,
+          logs: customLogs || logs,
+          visits,
+          periodLabel: options?.periodLabel || 'التقرير الشامل للمخرجات والزيارات والعمليات',
+          fileNamePrefix,
+          writeFile: false,
+          filters: options?.filters,
+        });
 
-      let subTypeText = '-';
-      if (log.category === 'صيانة عامة' && log.generalSubType) {
-        subTypeText = log.generalSubType;
-      } else if (log.category === 'استبدال' && log.replacementSubType) {
-        subTypeText = `استبدال ${log.replacementSubType}`;
+        const res = await desktopSave(result.fileName, result.base64Data || '');
+        if (res.ok && res.filePath && res.fileName) {
+          setLastSavedReport({
+            type: 'excel',
+            filePath: res.filePath,
+            fileName: res.fileName,
+            savedAt: new Date().toISOString(),
+          });
+          showToast(`تم حفظ تقرير Excel محلياً: ${res.fileName}`, 'success');
+          return;
+        }
+        showToast('تعذر حفظ التقرير في المجلد المحلي، سيتم المحاولة عبر التنزيل المباشر', 'error');
       }
 
-      let countText = '-';
-      if (log.devicesCount) countText = `${log.devicesCount} جهاز`;
-      else if (log.itemsCount) countText = `${log.itemsCount} قطعة`;
+      exportComprehensiveReportToExcel({
+        buildings,
+        rooms,
+        logs: customLogs || logs,
+        visits,
+        periodLabel: options?.periodLabel || 'التقرير الشامل للمخرجات والزيارات والعمليات',
+        fileNamePrefix,
+        writeFile: true,
+        filters: options?.filters,
+      });
+      showToast('تم تحميل تقرير Excel الشامل متعدد الأوراق بنجاح', 'success');
+    },
+    [logs, rooms, buildings, visits, showToast]
+  );
 
-      let brandOrSpecs = log.deviceBrand || '';
-      if (log.category === 'استبدال' && log.oldDevice && log.newDevice) {
-        brandOrSpecs = `قديم: ${log.oldDevice.nameOrBrand || ''} (${log.oldDevice.ram || ''}/${log.oldDevice.storage || ''}) -> جديد: ${log.newDevice.nameOrBrand || ''} (${log.newDevice.ram || ''}/${log.newDevice.storage || ''})`;
-      } else if (log.category === 'ترقية رام' && (log.previousRam || log.newRam)) {
-        brandOrSpecs = `${log.deviceBrand || ''} [من ${log.previousRam || ''} إلى ${log.newRam || ''}]`;
-      }
-
-      return {
-        'م': index + 1,
-        'تاريخ الإجراء': log.date,
-        'المبنى': buildingName,
-        'القاعة': room?.name || 'غير محدد',
-        'نوع العملية': log.category,
-        'التصنيف الفرعي': subTypeText,
-        'العدد': countText,
-        'الماركة / المواصفات': brandOrSpecs,
-        'تفاصيل العمل المنجز': log.actionDetails || '',
-        'اسم المنفذ': log.executorName || 'غير محدد',
-      };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(formattedData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'سجل العمليات الفنية');
-
-    worksheet['!cols'] = [
-      { wch: 6 },
-      { wch: 14 },
-      { wch: 22 },
-      { wch: 26 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 35 },
-      { wch: 45 },
-      { wch: 22 },
-    ];
-
-    const today = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `${fileNamePrefix}_${today}.xlsx`);
-    showToast('تم تحميل ملف Excel بنجاح', 'success');
-  }, [logs, rooms, buildings, showToast]);
-
-  const exportBackupJson = useCallback(() => {
+  const exportBackupJson = useCallback(async () => {
     const backupData = {
       app: 'IT Assets & Maintenance Hub',
-      version: '3.1.0',
+      version: '3.2.0',
       exportedAt: new Date().toISOString(),
       buildings,
       rooms,
       logs,
+      visits,
     };
 
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+    const jsonString = JSON.stringify(backupData, null, 2);
+    const fileName = `it_hub_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const desktopBackup = typeof window !== 'undefined' ? window.electronAPI?.saveBackupFile : undefined;
+
+    if (desktopBackup) {
+      const res = await desktopBackup(fileName, jsonString);
+      if (res.ok && res.filePath && res.fileName) {
+        setLastSavedReport({
+          type: 'backup',
+          filePath: res.filePath,
+          fileName: res.fileName,
+          savedAt: new Date().toISOString(),
+        });
+        showToast(`تم حفظ النسخة الاحتياطية محلياً: ${res.fileName}`, 'success');
+        return;
+      }
+      showToast('فشل حفظ النسخة الاحتياطية محلياً', 'error');
+      return;
+    }
+
+    const blob = new Blob([jsonString], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `it_hub_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
     showToast('تم تصدير النسخة الاحتياطية بنجاح', 'success');
-  }, [buildings, rooms, logs, showToast]);
+  }, [buildings, rooms, logs, visits, showToast]);
+
+  const savePdfReportLocal = useCallback(
+    async (fileNamePrefix = 'تقرير_المخرجات_الشامل') => {
+      if (typeof window === 'undefined' || !window.electronAPI?.savePdfReport) {
+        return null;
+      }
+
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+      const defaultName = `${fileNamePrefix}_${dateStr}_${timeStr}.pdf`;
+
+      const res = await window.electronAPI.savePdfReport(defaultName);
+      if (res.ok && res.filePath && res.fileName) {
+        setLastSavedReport({
+          type: 'pdf',
+          filePath: res.filePath,
+          fileName: res.fileName,
+          savedAt: new Date().toISOString(),
+        });
+        showToast(`تم حفظ التقرير PDF محلياً: ${res.fileName}`, 'success');
+      } else {
+        showToast('تعذر إنشاء ملف PDF محلياً', 'error');
+      }
+      return res;
+    },
+    [showToast]
+  );
+
+  const openLocalFolder = useCallback(
+    async (target: DesktopFolderTarget = 'root') => {
+      if (typeof window === 'undefined' || !window.electronAPI?.openLocalFolder) return;
+      const res = await window.electronAPI.openLocalFolder(target);
+      if (!res.ok) {
+        showToast('تعذر فتح المجلد المحلي', 'error');
+      }
+    },
+    [showToast]
+  );
+
+  const openLocalFile = useCallback(
+    async (filePath: string) => {
+      if (typeof window === 'undefined' || !window.electronAPI?.openLocalFile) return;
+      const res = await window.electronAPI.openLocalFile(filePath);
+      if (!res.ok) {
+        showToast('تعذر فتح الملف المحلي', 'error');
+      }
+    },
+    [showToast]
+  );
 
   const importBackupJson = useCallback(async (file: File): Promise<boolean> => {
     try {
@@ -822,8 +1125,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           setBuildings(INITIAL_BUILDINGS);
         }
-        setRooms(data.rooms);
+        setRooms(normalizeLoadedRooms(data.rooms));
         setLogs(data.logs);
+        setVisits(Array.isArray(data.visits) ? data.visits : []);
         setSelectedBuildingId(null);
         showToast('تمت استعادة النسخة الاحتياطية بنجاح', 'success');
         return true;
@@ -840,6 +1144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBuildings(INITIAL_BUILDINGS);
     setRooms(INITIAL_ROOMS);
     setLogs(INITIAL_LOGS);
+    setVisits([]);
     setSelectedBuildingId(null);
     showToast('تمت إعادة ضبط النظام إلى البيانات التجريبية الافتراضية', 'info');
   }, [showToast]);
@@ -849,6 +1154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     buildings,
     rooms,
     logs,
+    visits,
     stats,
     activeTab,
     setActiveTab,
@@ -876,6 +1182,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLog,
     updateLog,
     deleteLog,
+    addVisit,
+    deleteVisit,
     getRoomById,
     getRoomLogs,
     exportLogsToExcel,
@@ -886,10 +1194,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleDarkMode,
     toasts,
     showToast,
+    desktopStorageInfo,
+    lastSavedReport,
+    savePdfReportLocal,
+    openLocalFolder,
+    openLocalFile,
   }), [
     buildings,
     rooms,
     logs,
+    visits,
     stats,
     activeTab,
     selectedBuildingId,
@@ -913,6 +1227,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLog,
     updateLog,
     deleteLog,
+    addVisit,
+    deleteVisit,
     getRoomById,
     getRoomLogs,
     exportLogsToExcel,
@@ -923,6 +1239,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleDarkMode,
     toasts,
     showToast,
+    desktopStorageInfo,
+    lastSavedReport,
+    savePdfReportLocal,
+    openLocalFolder,
+    openLocalFile,
   ]);
 
   return (
