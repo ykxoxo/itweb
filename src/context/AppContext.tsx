@@ -27,10 +27,6 @@ import {
   createDefaultDevices,
   createDefaultInstructorDevice,
 } from '../data/initialData';
-import {
-  EXCEL_SEED_FLAG_KEY,
-  mergeBuiltinExcelSeedIntoState,
-} from '../data/excelSeedMerge';
 import { computeSystemStats } from '../utils/reportAggregator';
 import { exportComprehensiveReportToExcel } from '../utils/excelExporter';
 import {
@@ -175,11 +171,25 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  BUILDINGS: 'it_hub_buildings_v1',
-  ROOMS: 'it_hub_rooms_v5',
-  LOGS: 'it_hub_logs_v3',
-  VISITS: 'it_hub_visits_v1',
+  BUILDINGS: 'it_hub_buildings_empty_v1',
+  ROOMS: 'it_hub_rooms_empty_v1',
+  LOGS: 'it_hub_logs_empty_v1',
+  VISITS: 'it_hub_visits_empty_v1',
 };
+
+const LEGACY_STORAGE_KEYS = [
+  'it_hub_buildings_v1',
+  'it_hub_rooms_v5',
+  'it_hub_rooms_v4',
+  'it_hub_rooms_v3',
+  'it_hub_rooms_v2',
+  'it_hub_rooms_v1',
+  'it_hub_logs_v3',
+  'it_hub_logs_v2',
+  'it_hub_logs_v1',
+  'it_hub_visits_v1',
+  'it_hub_excel_seed_v1',
+];
 
 let entitySeq = 0;
 function nextEntityId(prefix: string): string {
@@ -279,7 +289,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       } catch (e) {
@@ -291,11 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [rooms, setRooms] = useState<Room[]>(() => {
     if (typeof window === 'undefined') return INITIAL_ROOMS;
-    const saved = localStorage.getItem(STORAGE_KEYS.ROOMS) ||
-                  localStorage.getItem('it_hub_rooms_v4') ||
-                  localStorage.getItem('it_hub_rooms_v3') || 
-                  localStorage.getItem('it_hub_rooms_v2') || 
-                  localStorage.getItem('it_hub_rooms_v1');
+    const saved = localStorage.getItem(STORAGE_KEYS.ROOMS);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -311,9 +317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [logs, setLogs] = useState<MaintenanceLog[]>(() => {
     if (typeof window === 'undefined') return INITIAL_LOGS;
-    const saved = localStorage.getItem(STORAGE_KEYS.LOGS) || 
-                  localStorage.getItem('it_hub_logs_v2') || 
-                  localStorage.getItem('it_hub_logs_v1');
+    const saved = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -353,12 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Failed to parse visits from localStorage', e);
       }
     }
-    const hasAnySavedStorage = Boolean(
-      localStorage.getItem(STORAGE_KEYS.BUILDINGS) ||
-        localStorage.getItem(STORAGE_KEYS.ROOMS) ||
-        localStorage.getItem(STORAGE_KEYS.LOGS)
-    );
-    return hasAnySavedStorage ? [] : INITIAL_VISITS;
+    return INITIAL_VISITS;
   });
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -389,51 +388,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   latestStateRef.current = { buildings, rooms, logs, visits, darkMode };
 
   // Hydrate state from local disk JSON database when running as Desktop program,
-  // or apply one-time built-in Excel seed merge for existing browser localStorage users.
+  // and clear any legacy pre-populated localStorage keys so users start completely empty.
   useEffect(() => {
     if (typeof window === 'undefined') {
       setDesktopHydrated(true);
       return;
     }
 
-    const applySeedIfNeeded = (
-      baseBuildings: Building[],
-      baseRooms: Room[],
-      baseVisits: RoomVisit[],
-      flagAlreadyApplied: boolean
-    ) => {
-      const hasXlsRooms = baseRooms.some((r) => r.id.startsWith('room-xls-'));
-      if (flagAlreadyApplied || hasXlsRooms) {
-        try {
-          localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
-        } catch {}
-        return { buildings: baseBuildings, rooms: baseRooms, visits: baseVisits, merged: false };
+    try {
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        localStorage.removeItem(legacyKey);
       }
-      const res = mergeBuiltinExcelSeedIntoState(
-        baseBuildings,
-        baseRooms,
-        baseVisits,
-        nextEntityId
-      );
-      try {
-        localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
-      } catch {}
-      return { buildings: res.buildings, rooms: res.rooms, visits: res.visits, merged: true };
-    };
+    } catch {}
 
     if (!window.electronAPI?.isDesktop) {
-      const browserFlag = localStorage.getItem(EXCEL_SEED_FLAG_KEY) === 'applied';
-      const synced = applySeedIfNeeded(
-        latestStateRef.current.buildings,
-        latestStateRef.current.rooms,
-        latestStateRef.current.visits,
-        browserFlag
-      );
-      if (synced.merged) {
-        setBuildings(synced.buildings);
-        setRooms(synced.rooms);
-        setVisits(synced.visits);
-      }
       setDesktopHydrated(true);
       return;
     }
@@ -451,42 +419,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const res = await api.loadLocalDatabase();
         if (!cancelled && res?.exists && res.data) {
           const db = res.data;
-          const dbBuildings =
-            Array.isArray(db.buildings) && db.buildings.length > 0
-              ? db.buildings
-              : latestStateRef.current.buildings;
-          const dbRooms = Array.isArray(db.rooms)
-            ? normalizeLoadedRooms(db.rooms)
-            : latestStateRef.current.rooms;
-          const dbLogs = Array.isArray(db.logs) ? db.logs : latestStateRef.current.logs;
-          const dbVisits = Array.isArray(db.visits) ? db.visits : latestStateRef.current.visits;
+          if (!db.cleanEmptyV1Applied) {
+            // One-time clean reset for desktop DBs from earlier seeded builds
+            setBuildings(INITIAL_BUILDINGS);
+            setRooms(INITIAL_ROOMS);
+            setLogs(INITIAL_LOGS);
+            setVisits(INITIAL_VISITS);
+          } else {
+            const dbBuildings = Array.isArray(db.buildings) ? db.buildings : INITIAL_BUILDINGS;
+            const dbRooms = Array.isArray(db.rooms)
+              ? normalizeLoadedRooms(db.rooms)
+              : INITIAL_ROOMS;
+            const dbLogs = Array.isArray(db.logs) ? db.logs : INITIAL_LOGS;
+            const dbVisits = Array.isArray(db.visits) ? db.visits : INITIAL_VISITS;
 
-          const synced = applySeedIfNeeded(
-            dbBuildings,
-            dbRooms,
-            dbVisits,
-            Boolean(db.excelSeedV1Applied)
-          );
-
-          setBuildings(synced.buildings);
-          setRooms(synced.rooms);
-          setLogs(dbLogs);
-          setVisits(synced.visits);
+            setBuildings(dbBuildings);
+            setRooms(dbRooms);
+            setLogs(dbLogs);
+            setVisits(dbVisits);
+          }
           if (typeof db.darkMode === 'boolean') {
             setDarkMode(db.darkMode);
-          }
-        } else if (!cancelled) {
-          const browserFlag = localStorage.getItem(EXCEL_SEED_FLAG_KEY) === 'applied';
-          const synced = applySeedIfNeeded(
-            latestStateRef.current.buildings,
-            latestStateRef.current.rooms,
-            latestStateRef.current.visits,
-            browserFlag
-          );
-          if (synced.merged) {
-            setBuildings(synced.buildings);
-            setRooms(synced.rooms);
-            setVisits(synced.visits);
           }
         }
       } catch (err) {
@@ -520,7 +473,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           logs,
           visits,
           darkMode,
-          excelSeedV1Applied: true,
+          cleanEmptyV1Applied: true,
         })
         .catch((err) => console.error('Failed to save desktop local database', err));
     }, 220);
@@ -542,7 +495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           version: '3.2.0',
           updatedAt: new Date().toISOString(),
           ...snapshot,
-          excelSeedV1Applied: true,
+          cleanEmptyV1Applied: true,
         })
         .catch(() => {});
     };
@@ -1390,12 +1343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLogs(INITIAL_LOGS);
     setVisits(INITIAL_VISITS);
     setSelectedBuildingId(null);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
-      } catch {}
-    }
-    showToast('تمت إعادة ضبط النظام إلى البيانات الافتراضية المحدثة', 'info');
+    showToast('تم تفريغ جميع البيانات والبدء من الصفر', 'info');
   }, [showToast]);
 
   // Memoize the entire context value to prevent unnecessary re-renders of consumer components

@@ -46,7 +46,7 @@ export const Navbar: React.FC = () => {
   };
 
   const handleResetConfirm = () => {
-    if (window.confirm('هل أنت متأكد من إعادة ضبط البيانات إلى الحالة التجريبية الافتراضية؟ سيتم استبدال البيانات الحالية.')) {
+    if (window.confirm('هل أنت متأكد من تفريغ جميع البيانات الحالية والبدء من الصفر؟')) {
       resetToDefaultData();
     }
   };
@@ -168,7 +168,7 @@ export const Navbar: React.FC = () => {
             <button
               onClick={handleResetConfirm}
               className="p-2 text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-              title="إعادة ضبط للبيانات الافتراضية"
+              title="تفريغ كافة البيانات"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -253,7 +253,7 @@ export const Navbar: React.FC = () => {
               className="flex items-center justify-center gap-1 py-2 px-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-semibold"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>إعادة ضبط</span>
+              <span>تفريغ</span>
             </button>
           </div>
           {desktopStorageInfo && (

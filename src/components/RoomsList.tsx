@@ -744,15 +744,42 @@ export const RoomsList: React.FC = () => {
         {filteredBuildings.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200/80 dark:border-slate-800 shadow-xs">
             <Building2 className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لم يتم العثور على أي مبانٍ مطابقة</h3>
-            <p className="text-xs text-slate-400 mt-1 mb-4">جرّب تغيير كلمات البحث أو أضف مبنى جديداً</p>
-            <button
-              onClick={() => setShowAddBuildingModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>إضافة مبنى جديد الآن</span>
-            </button>
+            {buildings.length === 0 ? (
+              <>
+                <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد مبانٍ أو قاعات مضافة بعد</h3>
+                <p className="text-xs text-slate-400 mt-1 mb-5">
+                  ابدأ بإضافة أول مبنى يدوياً، أو استورد ملف Excel ليتم إنشاء المباني والقاعات وتوزيع التواريخ تلقائياً.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => setShowAddBuildingModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                    <span>إضافة مبنى جديد الآن</span>
+                  </button>
+                  <button
+                    onClick={() => setShowExcelImportModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>استيراد وتوزيع من Excel</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لم يتم العثور على أي مبانٍ مطابقة</h3>
+                <p className="text-xs text-slate-400 mt-1 mb-4">جرّب تغيير كلمات البحث أو أضف مبنى جديداً</p>
+                <button
+                  onClick={() => setShowAddBuildingModal(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>إضافة مبنى جديد الآن</span>
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
