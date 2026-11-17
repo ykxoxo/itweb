@@ -367,11 +367,25 @@ export function aggregateReportData({
     })
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  // 3. Per-Room Summaries
+  // 3. Per-Room Summaries (O(R + V) pre-indexed maps)
+  const effectiveByRoom = new Map<string, EffectiveVisitRecord[]>();
+  for (const ev of effectiveVisits) {
+    const arr = effectiveByRoom.get(ev.roomId);
+    if (arr) arr.push(ev);
+    else effectiveByRoom.set(ev.roomId, [ev]);
+  }
+
+  const explicitByRoom = new Map<string, RoomVisit[]>();
+  for (const v of scopedVisits) {
+    const arr = explicitByRoom.get(v.roomId);
+    if (arr) arr.push(v);
+    else explicitByRoom.set(v.roomId, [v]);
+  }
+
   const byRoom: RoomReportSummary[] = scopedRooms.map((room) => {
     const building = buildingMap.get(room.buildingId);
-    const roomEffectiveVisits = effectiveVisits.filter((v) => v.roomId === room.id);
-    const roomExplicitVisits = scopedVisits.filter((v) => v.roomId === room.id);
+    const roomEffectiveVisits = effectiveByRoom.get(room.id) || [];
+    const roomExplicitVisits = explicitByRoom.get(room.id) || [];
 
     return {
       room,

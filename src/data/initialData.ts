@@ -1,4 +1,5 @@
-import type { Building, Room, MaintenanceLog, RoomDevice, DeviceStatus } from '../types';
+import type { Building, Room, MaintenanceLog, RoomDevice, DeviceStatus, RoomVisit } from '../types';
+import { EXCEL_SEED_BUILDINGS } from './excelSeedData';
 
 export const createDefaultDevices = (
   roomId: string,
@@ -40,7 +41,7 @@ export const createDefaultInstructorDevice = (
   deviceNotes: [],
 });
 
-export const INITIAL_BUILDINGS: Building[] = [
+const BASE_INITIAL_BUILDINGS: Building[] = [
   {
     id: 'bldg-1',
     name: 'مبنى الإدارة الرئيسية (A)',
@@ -61,7 +62,7 @@ export const INITIAL_BUILDINGS: Building[] = [
   },
 ];
 
-export const INITIAL_ROOMS: Room[] = [
+const BASE_INITIAL_ROOMS: Room[] = [
   {
     id: 'room-1',
     buildingId: 'bldg-1',
@@ -271,3 +272,56 @@ export const INITIAL_LOGS: MaintenanceLog[] = [
     createdAt: '2026-11-03T11:15:00.000Z',
   },
 ];
+
+// Built-in College Buildings, Rooms (1 device each in Building-Floor-Room format), and Visits extracted from user's Excel file
+const SEEDED_EXCEL_BUILDINGS: Building[] = EXCEL_SEED_BUILDINGS.map((b) => ({
+  id: b.id,
+  name: b.buildingName,
+  description: `مبنى مضاف من جدول الطلبات (${b.rooms.length} قاعة ومكتب)`,
+  createdAt: b.createdAt,
+}));
+
+const SEEDED_EXCEL_ROOMS: Room[] = EXCEL_SEED_BUILDINGS.flatMap((b) =>
+  b.rooms.map((r) => ({
+    id: r.id,
+    buildingId: b.id,
+    name: r.roomName,
+    screenStatus: 'تعمل بامتياز',
+    roomNotes: [],
+    layoutType: 'u-shape',
+    totalDevices: 1,
+    devices: [
+      {
+        id: `dev-${r.id}-1`,
+        tag: 'PC-01',
+        status: 'لم يتم العمل عليه' as DeviceStatus,
+        brand: 'Dell OptiPlex',
+        ram: '16GB',
+        storage: '512GB SSD',
+        powerSupply: 'سليم (500W)',
+        deviceNotes: [],
+      },
+    ],
+    skipAutoInstructorDevice: true,
+    createdAt: r.createdAt,
+  }))
+);
+
+const SEEDED_EXCEL_VISITS: RoomVisit[] = EXCEL_SEED_BUILDINGS.flatMap((b) =>
+  b.rooms.flatMap((r) =>
+    r.dates.map((dateStr, dIdx) => ({
+      id: `visit-xls-${r.id}-${dIdx + 1}`,
+      roomId: r.id,
+      date: dateStr,
+      purpose: 'صيانة وتنفيذ' as const,
+      notes: `مستورد من سجل الطلبات (${r.roomName})`,
+      createdAt: `${dateStr}T08:00:00.000Z`,
+    }))
+  )
+).sort((a, b) => b.date.localeCompare(a.date));
+
+export const INITIAL_BUILDINGS: Building[] = [...BASE_INITIAL_BUILDINGS, ...SEEDED_EXCEL_BUILDINGS];
+
+export const INITIAL_ROOMS: Room[] = [...BASE_INITIAL_ROOMS, ...SEEDED_EXCEL_ROOMS];
+
+export const INITIAL_VISITS: RoomVisit[] = SEEDED_EXCEL_VISITS;

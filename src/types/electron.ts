@@ -20,6 +20,7 @@ export interface DesktopDatabasePayload {
   logs: MaintenanceLog[];
   visits: RoomVisit[];
   darkMode: boolean;
+  excelSeedV1Applied?: boolean;
 }
 
 export interface DesktopLoadDatabaseResult {

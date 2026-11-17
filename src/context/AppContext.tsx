@@ -23,9 +23,14 @@ import {
   INITIAL_BUILDINGS,
   INITIAL_ROOMS,
   INITIAL_LOGS,
+  INITIAL_VISITS,
   createDefaultDevices,
   createDefaultInstructorDevice,
 } from '../data/initialData';
+import {
+  EXCEL_SEED_FLAG_KEY,
+  mergeBuiltinExcelSeedIntoState,
+} from '../data/excelSeedMerge';
 import { computeSystemStats } from '../utils/reportAggregator';
 import { exportComprehensiveReportToExcel } from '../utils/excelExporter';
 import {
@@ -336,7 +341,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [visits, setVisits] = useState<RoomVisit[]>(() => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined') return INITIAL_VISITS;
     const saved = localStorage.getItem(STORAGE_KEYS.VISITS);
     if (saved) {
       try {
@@ -348,7 +353,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Failed to parse visits from localStorage', e);
       }
     }
-    return [];
+    const hasAnySavedStorage = Boolean(
+      localStorage.getItem(STORAGE_KEYS.BUILDINGS) ||
+        localStorage.getItem(STORAGE_KEYS.ROOMS) ||
+        localStorage.getItem(STORAGE_KEYS.LOGS)
+    );
+    return hasAnySavedStorage ? [] : INITIAL_VISITS;
   });
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -378,9 +388,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const latestStateRef = useRef({ buildings, rooms, logs, visits, darkMode });
   latestStateRef.current = { buildings, rooms, logs, visits, darkMode };
 
-  // Hydrate state from local disk JSON database when running as Desktop program
+  // Hydrate state from local disk JSON database when running as Desktop program,
+  // or apply one-time built-in Excel seed merge for existing browser localStorage users.
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.electronAPI?.isDesktop) {
+    if (typeof window === 'undefined') {
+      setDesktopHydrated(true);
+      return;
+    }
+
+    const applySeedIfNeeded = (
+      baseBuildings: Building[],
+      baseRooms: Room[],
+      baseVisits: RoomVisit[],
+      flagAlreadyApplied: boolean
+    ) => {
+      const hasXlsRooms = baseRooms.some((r) => r.id.startsWith('room-xls-'));
+      if (flagAlreadyApplied || hasXlsRooms) {
+        try {
+          localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
+        } catch {}
+        return { buildings: baseBuildings, rooms: baseRooms, visits: baseVisits, merged: false };
+      }
+      const res = mergeBuiltinExcelSeedIntoState(
+        baseBuildings,
+        baseRooms,
+        baseVisits,
+        nextEntityId
+      );
+      try {
+        localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
+      } catch {}
+      return { buildings: res.buildings, rooms: res.rooms, visits: res.visits, merged: true };
+    };
+
+    if (!window.electronAPI?.isDesktop) {
+      const browserFlag = localStorage.getItem(EXCEL_SEED_FLAG_KEY) === 'applied';
+      const synced = applySeedIfNeeded(
+        latestStateRef.current.buildings,
+        latestStateRef.current.rooms,
+        latestStateRef.current.visits,
+        browserFlag
+      );
+      if (synced.merged) {
+        setBuildings(synced.buildings);
+        setRooms(synced.rooms);
+        setVisits(synced.visits);
+      }
       setDesktopHydrated(true);
       return;
     }
@@ -398,20 +451,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const res = await api.loadLocalDatabase();
         if (!cancelled && res?.exists && res.data) {
           const db = res.data;
-          if (Array.isArray(db.buildings) && db.buildings.length > 0) {
-            setBuildings(db.buildings);
-          }
-          if (Array.isArray(db.rooms)) {
-            setRooms(normalizeLoadedRooms(db.rooms));
-          }
-          if (Array.isArray(db.logs)) {
-            setLogs(db.logs);
-          }
-          if (Array.isArray(db.visits)) {
-            setVisits(db.visits);
-          }
+          const dbBuildings =
+            Array.isArray(db.buildings) && db.buildings.length > 0
+              ? db.buildings
+              : latestStateRef.current.buildings;
+          const dbRooms = Array.isArray(db.rooms)
+            ? normalizeLoadedRooms(db.rooms)
+            : latestStateRef.current.rooms;
+          const dbLogs = Array.isArray(db.logs) ? db.logs : latestStateRef.current.logs;
+          const dbVisits = Array.isArray(db.visits) ? db.visits : latestStateRef.current.visits;
+
+          const synced = applySeedIfNeeded(
+            dbBuildings,
+            dbRooms,
+            dbVisits,
+            Boolean(db.excelSeedV1Applied)
+          );
+
+          setBuildings(synced.buildings);
+          setRooms(synced.rooms);
+          setLogs(dbLogs);
+          setVisits(synced.visits);
           if (typeof db.darkMode === 'boolean') {
             setDarkMode(db.darkMode);
+          }
+        } else if (!cancelled) {
+          const browserFlag = localStorage.getItem(EXCEL_SEED_FLAG_KEY) === 'applied';
+          const synced = applySeedIfNeeded(
+            latestStateRef.current.buildings,
+            latestStateRef.current.rooms,
+            latestStateRef.current.visits,
+            browserFlag
+          );
+          if (synced.merged) {
+            setBuildings(synced.buildings);
+            setRooms(synced.rooms);
+            setVisits(synced.visits);
           }
         }
       } catch (err) {
@@ -445,6 +520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           logs,
           visits,
           darkMode,
+          excelSeedV1Applied: true,
         })
         .catch((err) => console.error('Failed to save desktop local database', err));
     }, 220);
@@ -466,6 +542,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           version: '3.2.0',
           updatedAt: new Date().toISOString(),
           ...snapshot,
+          excelSeedV1Applied: true,
         })
         .catch(() => {});
     };
@@ -1311,9 +1388,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBuildings(INITIAL_BUILDINGS);
     setRooms(INITIAL_ROOMS);
     setLogs(INITIAL_LOGS);
-    setVisits([]);
+    setVisits(INITIAL_VISITS);
     setSelectedBuildingId(null);
-    showToast('تمت إعادة ضبط النظام إلى البيانات التجريبية الافتراضية', 'info');
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(EXCEL_SEED_FLAG_KEY, 'applied');
+      } catch {}
+    }
+    showToast('تمت إعادة ضبط النظام إلى البيانات الافتراضية المحدثة', 'info');
   }, [showToast]);
 
   // Memoize the entire context value to prevent unnecessary re-renders of consumer components
