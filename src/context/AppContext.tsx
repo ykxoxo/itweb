@@ -28,6 +28,12 @@ import {
 } from '../data/initialData';
 import { computeSystemStats } from '../utils/reportAggregator';
 import { exportComprehensiveReportToExcel } from '../utils/excelExporter';
+import {
+  normalizeArabicForMatch,
+  normalizeBuildingMatchKey,
+  type ParsedExcelRow,
+  type ExcelImportOptions,
+} from '../utils/excelLocationImporter';
 
 export type TabType = 'dashboard' | 'rooms' | 'add-log' | 'reports';
 
@@ -132,6 +138,16 @@ interface AppContextType {
   ) => Promise<void>;
   exportBackupJson: () => Promise<void>;
   importBackupJson: (file: File) => Promise<boolean>;
+  importExcelSchedule: (
+    rows: ParsedExcelRow[],
+    options: ExcelImportOptions
+  ) => {
+    buildingsCreated: number;
+    roomsCreated: number;
+    visitsAdded: number;
+    logsAdded: number;
+    skippedDuplicates: number;
+  };
   resetToDefaultData: () => void;
   darkMode: boolean;
   toggleDarkMode: () => void;
@@ -212,9 +228,11 @@ function normalizeLoadedRooms(rawRooms: any[]): Room[] {
               ? r.instructorDevice.deviceNotes
               : [],
           }
-        : devices.length > 0 || totalDevices > 0
-          ? createDefaultInstructorDevice(roomId)
-          : undefined;
+        : r.skipAutoInstructorDevice
+          ? undefined
+          : devices.length > 0 || totalDevices > 0
+            ? createDefaultInstructorDevice(roomId)
+            : undefined;
 
     return {
       ...r,
@@ -239,6 +257,7 @@ function updateDeviceInRoom(
     const currentInstructor = room.instructorDevice || createDefaultInstructorDevice(room.id);
     return {
       ...room,
+      skipAutoInstructorDevice: false,
       instructorDevice: updater(currentInstructor),
     };
   }
@@ -1140,6 +1159,154 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [showToast]);
 
+  const importExcelSchedule = useCallback(
+    (rows: ParsedExcelRow[], options: ExcelImportOptions) => {
+      const selectedRows = rows.filter((r) => r.selected);
+      const isReplace = options.mode === 'replace';
+
+      const nextBuildings: Building[] = isReplace ? [] : [...buildings];
+      const nextRooms: Room[] = isReplace ? [] : [...rooms];
+      const nextLogs: MaintenanceLog[] = isReplace ? [] : [...logs];
+      const nextVisits: RoomVisit[] = isReplace ? [] : [...visits];
+
+      const buildingMap = new Map<string, Building>();
+      for (const b of nextBuildings) {
+        buildingMap.set(normalizeBuildingMatchKey(b.name), b);
+      }
+
+      const roomMap = new Map<string, Room>();
+      for (const r of nextRooms) {
+        roomMap.set(`${r.buildingId}__${normalizeArabicForMatch(r.name)}`, r);
+      }
+
+      const existingVisitDates = new Set<string>(
+        nextVisits.map((v) => `${v.roomId}__${(v.date || '').slice(0, 10)}`)
+      );
+
+      let buildingsCreated = 0;
+      let roomsCreated = 0;
+      let visitsAdded = 0;
+      let logsAdded = 0;
+      let skippedDuplicates = 0;
+
+      const deviceCount = Math.max(1, Number(options.deviceCountPerRoom) || 1);
+      const todayIso = new Date().toISOString().split('T')[0];
+
+      for (const item of selectedRows) {
+        const cleanBldgName = item.location.buildingName.trim() || 'مبنى غير محدد';
+        const cleanRoomName = item.location.roomName.trim() || item.rawLocation.trim();
+        const bldgMatchKey = normalizeBuildingMatchKey(cleanBldgName);
+
+        let targetBuilding = buildingMap.get(bldgMatchKey);
+        if (!targetBuilding) {
+          targetBuilding = {
+            id: nextEntityId('bldg'),
+            name: cleanBldgName,
+            description: `تم إنشاؤه تلقائياً من استيراد Excel (الرمز: ${item.location.buildingCode})`,
+            createdAt: item.date || todayIso,
+          };
+          buildingMap.set(bldgMatchKey, targetBuilding);
+          nextBuildings.push(targetBuilding);
+          buildingsCreated += 1;
+        }
+
+        const roomLookupKey = `${targetBuilding.id}__${normalizeArabicForMatch(cleanRoomName)}`;
+        let targetRoom = roomMap.get(roomLookupKey);
+        if (!targetRoom) {
+          const roomId = nextEntityId('room');
+          const devices = Array.from({ length: deviceCount }, (_, i) => ({
+            id: `dev-${roomId}-${i + 1}`,
+            tag: `PC-${String(i + 1).padStart(2, '0')}`,
+            status: 'لم يتم العمل عليه' as DeviceStatus,
+            brand: 'Dell OptiPlex',
+            ram: '16GB',
+            storage: '512GB SSD',
+            powerSupply: 'سليم (500W)',
+            deviceNotes: [],
+          }));
+
+          targetRoom = {
+            id: roomId,
+            buildingId: targetBuilding.id,
+            name: cleanRoomName,
+            screenStatus: 'تعمل بامتياز',
+            roomNotes: [],
+            layoutType: 'u-shape',
+            totalDevices: deviceCount,
+            devices,
+            instructorDevice: options.includeInstructorDevice
+              ? createDefaultInstructorDevice(roomId, 'لم يتم العمل عليه')
+              : undefined,
+            skipAutoInstructorDevice: !options.includeInstructorDevice,
+            createdAt: item.date || todayIso,
+          };
+          roomMap.set(roomLookupKey, targetRoom);
+          nextRooms.push(targetRoom);
+          roomsCreated += 1;
+        }
+
+        const visitKey = `${targetRoom.id}__${item.date}`;
+        if (options.deduplicateSameDayVisits && existingVisitDates.has(visitKey)) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        existingVisitDates.add(visitKey);
+
+        nextVisits.push({
+          id: nextEntityId('visit'),
+          roomId: targetRoom.id,
+          date: item.date,
+          purpose: 'صيانة وتنفيذ',
+          notes: `استيراد Excel (${cleanRoomName})`,
+          createdAt: new Date().toISOString(),
+        });
+        visitsAdded += 1;
+
+        if (options.recordAs === 'visits-and-logs') {
+          nextLogs.push({
+            id: nextEntityId('log'),
+            roomId: targetRoom.id,
+            category: 'صيانة عامة',
+            generalSubType: 'أجهزة',
+            devicesCount: 1,
+            actionDetails: `توزيع تلقائي من ملف Excel (${cleanRoomName})`,
+            date: item.date,
+            createdAt: new Date().toISOString(),
+          });
+          logsAdded += 1;
+        }
+      }
+
+      // Sort visits newest first cleanly
+      nextVisits.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      if (options.recordAs === 'visits-and-logs' || isReplace) {
+        nextLogs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        setLogs(nextLogs);
+      }
+
+      setBuildings(nextBuildings);
+      setRooms(nextRooms);
+      setVisits(nextVisits);
+      if (isReplace) {
+        setSelectedBuildingId(null);
+      }
+
+      showToast(
+        `تم التوزيع بنجاح: ${buildingsCreated} مبنى جديد، ${roomsCreated} قاعة، ${visitsAdded} تاريخ زيارة`,
+        'success'
+      );
+
+      return {
+        buildingsCreated,
+        roomsCreated,
+        visitsAdded,
+        logsAdded,
+        skippedDuplicates,
+      };
+    },
+    [buildings, rooms, logs, visits, showToast]
+  );
+
   const resetToDefaultData = useCallback(() => {
     setBuildings(INITIAL_BUILDINGS);
     setRooms(INITIAL_ROOMS);
@@ -1189,6 +1356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exportLogsToExcel,
     exportBackupJson,
     importBackupJson,
+    importExcelSchedule,
     resetToDefaultData,
     darkMode,
     toggleDarkMode,
@@ -1234,6 +1402,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exportLogsToExcel,
     exportBackupJson,
     importBackupJson,
+    importExcelSchedule,
     resetToDefaultData,
     darkMode,
     toggleDarkMode,

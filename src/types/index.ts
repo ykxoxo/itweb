@@ -92,6 +92,7 @@ export interface Room {
   totalDevices: number;
   devices: RoomDevice[];
   instructorDevice?: RoomDevice; // جهاز مكتب المدرب الخاص بالقاعة
+  skipAutoInstructorDevice?: boolean; // عند استيراد قاعة بجهاز واحد فقط من Excel
   createdAt: string;
 }
 

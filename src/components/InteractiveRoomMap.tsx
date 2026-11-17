@@ -132,12 +132,14 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
   const devices = room.devices || [];
 
   const instructorDevice = useMemo(
-    () => room.instructorDevice || createDefaultInstructorDevice(room.id),
-    [room.instructorDevice, room.id]
+    () =>
+      room.instructorDevice ||
+      (room.skipAutoInstructorDevice ? null : createDefaultInstructorDevice(room.id)),
+    [room.instructorDevice, room.skipAutoInstructorDevice, room.id]
   );
 
   const allRoomDevices = useMemo(
-    () => [...devices, instructorDevice],
+    () => (instructorDevice ? [...devices, instructorDevice] : devices),
     [devices, instructorDevice]
   );
 
@@ -559,7 +561,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
           <span className="text-slate-400 font-bold hidden sm:inline">•</span>
           <span className="text-slate-500 dark:text-slate-400 font-bold">
-            الإجمالي: {allRoomDevices.length} جهاز ({devices.length} + المدرب)
+            الإجمالي: {allRoomDevices.length} جهاز{instructorDevice ? ` (${devices.length} + المدرب)` : ''}
           </span>
         </div>
 
@@ -759,6 +761,26 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
 
           {/* Fixed Landmark: Instructor Desk + Instructor PC (Bottom-Right, Interactive) */}
           {(() => {
+            if (!instructorDevice) {
+              return (
+                <button
+                  type="button"
+                  dir="rtl"
+                  onClick={() => handleOpenDevice(createDefaultInstructorDevice(room.id))}
+                  title="اضغط لإضافة وتفعيل جهاز خاص بمكتب المدرب لهذه القاعة"
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-100/80 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 hover:border-blue-500 text-blue-900 dark:text-blue-200 text-xs font-black shadow-xs transition-all cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0" />
+                  <div className="text-right">
+                    <div>مكتب المدرب (Instructor)</div>
+                    <span className="text-[9px] text-blue-700/80 dark:text-blue-300/80 font-normal">
+                      اضغط لتفعيل جهاز المدرب
+                    </span>
+                  </div>
+                </button>
+              );
+            }
+
             const instStatusCfg =
               DEVICE_STATUS_CONFIG[instructorDevice.status] || DEVICE_STATUS_CONFIG['لم يتم العمل عليه'];
             const isInstSelected = selectedDeviceIds.includes(instructorDevice.id);
@@ -854,7 +876,7 @@ export const InteractiveRoomMap: React.FC<InteractiveRoomMapProps> = ({ room }) 
                     <h3 className="text-lg font-black text-slate-900 dark:text-white">
                       بيانات وملاحظات: {activeDevice.tag}
                     </h3>
-                    {activeDevice.id === instructorDevice.id && (
+                    {instructorDevice && activeDevice.id === instructorDevice.id && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
                         <UserCheck className="w-3 h-3" />
                         <span>جهاز مكتب المدرب</span>

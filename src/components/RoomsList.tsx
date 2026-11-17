@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ScreenStatus, Building, RoomLayoutType } from '../types';
 import { RoomNotesModal } from './RoomNotesModal';
+import { ExcelImportModal } from './ExcelImportModal';
 import { aggregateReportData } from '../utils/reportAggregator';
 import {
   Building2,
@@ -26,6 +27,7 @@ import {
   FolderOpen,
   ChevronLeft,
   ClipboardList,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const SCREEN_STATUS_CONFIG: Record<
@@ -104,6 +106,7 @@ export const RoomsList: React.FC = () => {
 
   // Building modals state
   const [showAddBuildingModal, setShowAddBuildingModal] = useState(false);
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
   const [newBuildingDesc, setNewBuildingDesc] = useState('');
 
@@ -703,13 +706,24 @@ export const RoomsList: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowAddBuildingModal(true)}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all active:scale-95 self-start sm:self-auto"
-          >
-            <Plus className="w-5 h-5 stroke-[2.5]" />
-            <span>إضافة مبنى جديد</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+            <button
+              onClick={() => setShowExcelImportModal(true)}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+              title="استيراد ملف Excel/CSV وإنشاء المباني والقاعات وتوزيع التواريخ تلقائياً"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              <span>استيراد وتوزيع من Excel</span>
+            </button>
+
+            <button
+              onClick={() => setShowAddBuildingModal(true)}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all active:scale-95"
+            >
+              <Plus className="w-5 h-5 stroke-[2.5]" />
+              <span>إضافة مبنى جديد</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter and Search Bar for Buildings */}
@@ -992,6 +1006,11 @@ export const RoomsList: React.FC = () => {
         )}
 
       </div>
+
+      <ExcelImportModal
+        isOpen={showExcelImportModal}
+        onClose={() => setShowExcelImportModal(false)}
+      />
     </>
   );
 };

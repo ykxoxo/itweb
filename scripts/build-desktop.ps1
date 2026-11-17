@@ -10,6 +10,9 @@ Write-Host "1. Cleaning previous output and running Next.js static export..." -F
 Remove-Item -Path "out" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "release-desktop" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "IT-Maintenance-Hub-Single-EXE" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "IT-Maintenance-Hub-Single-EXE.zip" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "single exe" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "single exe.zip" -Force -ErrorAction SilentlyContinue
 
 npm run build
 Assert-LastExitCode "Next.js static build"
@@ -41,21 +44,22 @@ Write-Host "5. Generating Single Standalone EXE packages..." -ForegroundColor Cy
 npx electron-builder --win --prepackaged "IT-Assets-Hub-Desktop\IT-Maintenance-Hub-win32-x64"
 Assert-LastExitCode "electron-builder"
 
-New-Item -ItemType Directory -Path "IT-Maintenance-Hub-Single-EXE" -Force | Out-Null
-Copy-Item "release-desktop\IT-Maintenance-Hub 1.0.0.exe" -Destination "IT-Maintenance-Hub-Single-EXE\IT-Maintenance-Hub-Portable.exe" -Force
-Copy-Item "release-desktop\IT-Maintenance-Hub Setup 1.0.0.exe" -Destination "IT-Maintenance-Hub-Single-EXE\IT-Maintenance-Hub-Setup.exe" -Force
+$outputFolderName = "single exe"
+$outputDir = Join-Path (Get-Location) $outputFolderName
+New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+Copy-Item "release-desktop\IT-Maintenance-Hub 1.0.0.exe" -Destination (Join-Path $outputDir "IT-Maintenance-Hub-Portable.exe") -Force
+Copy-Item "release-desktop\IT-Maintenance-Hub Setup 1.0.0.exe" -Destination (Join-Path $outputDir "IT-Maintenance-Hub-Setup.exe") -Force
 
 # Copy UTF-8 Arabic README with explicit Unicode filename
 $readmeSource = Join-Path (Get-Location) "scripts\README-desktop-ar.txt"
 $readmeFileName = "README-" + [char]0x062A + [char]0x0639 + [char]0x0644 + [char]0x064A + [char]0x0645 + [char]0x0627 + [char]0x062A + ".txt"
-$readmeDest = Join-Path (Join-Path (Get-Location) "IT-Maintenance-Hub-Single-EXE") $readmeFileName
+$readmeDest = Join-Path $outputDir $readmeFileName
 $readmeText = [System.IO.File]::ReadAllText($readmeSource, [System.Text.UTF8Encoding]::new($false))
 [System.IO.File]::WriteAllText($readmeDest, $readmeText, [System.Text.UTF8Encoding]::new($true))
 
 Write-Host "6. Creating distributable ZIP archive..." -ForegroundColor Cyan
-$zipPath = Join-Path (Get-Location) "IT-Maintenance-Hub-Single-EXE.zip"
-Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path "IT-Maintenance-Hub-Single-EXE" -DestinationPath $zipPath -CompressionLevel Optimal
+$zipPath = Join-Path (Get-Location) "single exe.zip"
+Compress-Archive -Path $outputFolderName -DestinationPath $zipPath -CompressionLevel Optimal
 
 Write-Host "SUCCESS: Desktop EXE and ZIP ready!" -ForegroundColor Green
 Get-Item $zipPath | Select-Object FullName, Length, LastWriteTime
